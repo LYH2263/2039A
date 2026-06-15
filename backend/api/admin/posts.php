@@ -56,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $title = trim($input['title'] ?? '');
     $content = trim($input['content'] ?? '');
     $tags = isset($input['tags']) && is_array($input['tags']) ? $input['tags'] : null;
+    $revision_note = isset($input['revision_note']) ? trim($input['revision_note']) : null;
     
     if (empty($title) || empty($content)) {
         jsonResponse(['error' => 'Title and Content required'], 400);
@@ -63,6 +64,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     
     $conn->begin_transaction();
     try {
+        $stmt = $conn->prepare("SELECT title, content FROM posts WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $old_post = $stmt->get_result()->fetch_assoc();
+        
+        if (!$old_post) {
+            jsonResponse(['error' => 'Post not found'], 404);
+        }
+        
+        $has_changes = $old_post['title'] !== $title || $old_post['content'] !== $content || $tags !== null;
+        
+        if ($has_changes) {
+            $old_tags = getTagsForPost($conn, $id);
+            $old_tags_names = array_map(function($t) { return $t['display_name']; }, $old_tags);
+            $tags_snapshot = json_encode($old_tags_names, JSON_UNESCAPED_UNICODE);
+            $admin_name = $_SESSION['admin_username'] ?? 'admin';
+            
+            $rev_stmt = $conn->prepare("INSERT INTO post_revisions (post_id, title, content, tags_snapshot, revision_note, created_by) VALUES (?, ?, ?, ?, ?, ?)");
+            $rev_stmt->bind_param("isssss", $id, $old_post['title'], $old_post['content'], $tags_snapshot, $revision_note, $admin_name);
+            $rev_stmt->execute();
+        }
+        
         $stmt = $conn->prepare("UPDATE posts SET title = ?, content = ? WHERE id = ?");
         $stmt->bind_param("ssi", $title, $content, $id);
         $stmt->execute();
@@ -72,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         }
         
         $conn->commit();
-        jsonResponse(['message' => 'Post updated']);
+        jsonResponse(['message' => 'Post updated', 'revision_saved' => $has_changes]);
     } catch (Exception $e) {
         $conn->rollback();
         jsonResponse(['error' => 'Failed to update: ' . $e->getMessage()], 500);

@@ -132,3 +132,17 @@ CREATE TABLE IF NOT EXISTS `reports` (
     INDEX `idx_target` (`target_type`, `target_id`),
     INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `post_revisions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `post_id` INT NOT NULL COMMENT '所属帖子ID',
+    `title` VARCHAR(255) NOT NULL COMMENT '历史版本标题',
+    `content` TEXT NOT NULL COMMENT '历史版本内容',
+    `tags_snapshot` TEXT DEFAULT NULL COMMENT '标签JSON快照',
+    `revision_note` VARCHAR(255) DEFAULT NULL COMMENT '版本备注（如回滚来源）',
+    `created_by` VARCHAR(100) DEFAULT NULL COMMENT '创建人（管理员）',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '版本创建时间',
+    FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON DELETE CASCADE,
+    INDEX `idx_post_id` (`post_id`),
+    INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

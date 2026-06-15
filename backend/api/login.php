@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($username === ADMIN_USER && $password === ADMIN_PASS) {
         $_SESSION['is_admin'] = true;
+        $_SESSION['admin_username'] = $username;
         jsonResponse(['message' => 'Login successful', 'success' => true]);
     } else {
         // 异常处理：凭证错误

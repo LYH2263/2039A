@@ -1,4 +1,4 @@
-import { fetchApi, escapeHtml } from './config.js';
+import { fetchApi, escapeHtml, formatDate } from './config.js';
 import { renderAdminHeader } from './admin_header.js';
 import { renderMarkdownSafe } from './markdown.js';
 import './styles.css';
@@ -10,11 +10,86 @@ const urlParams = new URLSearchParams(window.location.search);
 const postId = urlParams.get('id');
 let selectedTags = [];
 let availableTags = [];
+let revisions = [];
+let currentPostSnapshot = null;
+let selectedRevision = null;
+let showDiffMode = false;
 
 if (!postId) {
     app.innerHTML = '<div class="container mt-5"><div class="alert alert-danger">无效的帖子ID</div></div>';
 } else {
     loadPost(postId);
+}
+
+function computeLCS(arr1, arr2) {
+    const m = arr1.length;
+    const n = arr2.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            if (arr1[i - 1] === arr2[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+    }
+    
+    return dp;
+}
+
+function diffLines(oldText, newText) {
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    const dp = computeLCS(oldLines, newLines);
+    
+    const result = [];
+    let i = oldLines.length;
+    let j = newLines.length;
+    
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+            result.unshift({ type: 'equal', value: oldLines[i - 1] });
+            i--;
+            j--;
+        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+            result.unshift({ type: 'added', value: newLines[j - 1] });
+            j--;
+        } else {
+            result.unshift({ type: 'removed', value: oldLines[i - 1] });
+            i--;
+        }
+    }
+    
+    return result;
+}
+
+function renderDiffView(oldText, newText) {
+    const diffs = diffLines(oldText, newText);
+    
+    let addedCount = 0;
+    let removedCount = 0;
+    diffs.forEach(d => {
+        if (d.type === 'added') addedCount++;
+        if (d.type === 'removed') removedCount++;
+    });
+    
+    const html = diffs.map(d => {
+        const escaped = escapeHtml(d.value) || '&nbsp;';
+        if (d.type === 'added') {
+            return `<div class="diff-line diff-added"><span class="diff-sign">+</span>${escaped}</div>`;
+        } else if (d.type === 'removed') {
+            return `<div class="diff-line diff-removed"><span class="diff-sign">-</span>${escaped}</div>`;
+        } else {
+            return `<div class="diff-line diff-equal"><span class="diff-sign"> </span>${escaped}</div>`;
+        }
+    }).join('');
+    
+    return {
+        html,
+        stats: { added: addedCount, removed: removedCount }
+    };
 }
 
 async function loadAvailableTags() {
@@ -26,6 +101,18 @@ async function loadAvailableTags() {
     }
 }
 
+async function loadRevisions() {
+    try {
+        const data = await fetchApi(`/admin/revisions.php?post_id=${postId}`);
+        revisions = data.revisions || [];
+        renderRevisionSidebar();
+    } catch (error) {
+        console.error('Failed to load revisions:', error);
+        revisions = [];
+        renderRevisionSidebar();
+    }
+}
+
 async function loadPost(id) {
     try {
         const [postData] = await Promise.all([
@@ -33,7 +120,13 @@ async function loadPost(id) {
             loadAvailableTags()
         ]);
         selectedTags = (postData.tags || []).map(t => t.display_name);
+        currentPostSnapshot = {
+            title: postData.post.title,
+            content: postData.post.content,
+            tags: [...selectedTags]
+        };
         renderEditForm(postData.post);
+        loadRevisions();
     } catch (error) {
         app.innerHTML = `<div class="container mt-5"><div class="alert alert-danger">加载失败: ${error.message}</div></div>`;
     }
@@ -212,11 +305,304 @@ function initAdminMdEditor() {
     adminUpdateMdView(adminCurrentMdView);
 }
 
+function renderRevisionSidebar() {
+    const sidebar = document.getElementById('revision-sidebar');
+    if (!sidebar) return;
+    
+    if (revisions.length === 0) {
+        sidebar.innerHTML = `
+            <div class="text-muted text-center py-4">
+                <i class="bi bi-clock-history fs-2 d-block mb-2 opacity-50"></i>
+                <small>暂无历史版本</small>
+            </div>
+        `;
+        return;
+    }
+    
+    sidebar.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0 fw-bold text-secondary">历史版本</h6>
+            <span class="badge bg-light text-dark">${revisions.length}</span>
+        </div>
+        <div class="revision-list">
+            ${revisions.map((rev, idx) => `
+                <div class="revision-item ${selectedRevision?.id === rev.id ? 'active' : ''}" data-revision-id="${rev.id}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="revision-title text-truncate fw-medium">
+                                ${idx === 0 ? '<span class="badge bg-info text-dark me-1">最新</span>' : ''}
+                                ${escapeHtml(rev.title)}
+                            </div>
+                            <div class="revision-meta small text-muted mt-1">
+                                <i class="bi bi-person"></i> ${escapeHtml(rev.created_by || 'admin')}
+                            </div>
+                            <div class="revision-meta small text-muted">
+                                <i class="bi bi-calendar3"></i> ${formatDate(rev.created_at)}
+                            </div>
+                            ${rev.revision_note ? `<div class="revision-note small text-info mt-1"><i class="bi bi-info-circle"></i> ${escapeHtml(rev.revision_note)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="revision-actions mt-2 d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary view-revision" data-id="${rev.id}">
+                            <i class="bi bi-eye"></i> 查看
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary diff-revision" data-id="${rev.id}">
+                            <i class="bi bi-arrows-collapse"></i> 对比
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    sidebar.querySelectorAll('.view-revision').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            viewRevision(parseInt(btn.dataset.id));
+        });
+    });
+    
+    sidebar.querySelectorAll('.diff-revision').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showDiffWithRevision(parseInt(btn.dataset.id));
+        });
+    });
+}
+
+async function viewRevision(revisionId) {
+    try {
+        const rev = await fetchApi(`/admin/revisions.php?id=${revisionId}`);
+        selectedRevision = rev;
+        showDiffMode = false;
+        renderRevisionSidebar();
+        renderRevisionModal(rev, false);
+    } catch (error) {
+        alert('加载版本失败: ' + error.message);
+    }
+}
+
+async function showDiffWithRevision(revisionId) {
+    try {
+        const rev = await fetchApi(`/admin/revisions.php?id=${revisionId}`);
+        selectedRevision = rev;
+        showDiffMode = true;
+        renderRevisionSidebar();
+        renderRevisionModal(rev, true);
+    } catch (error) {
+        alert('加载版本失败: ' + error.message);
+    }
+}
+
+function renderRevisionModal(rev, isDiff) {
+    const modalId = 'revisionModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+    
+    const currentTitle = document.getElementById('title')?.value || currentPostSnapshot.title;
+    const currentContent = document.getElementById('content')?.value || currentPostSnapshot.content;
+    
+    let titleContent = '';
+    let bodyContent = '';
+    let footerExtra = '';
+    
+    if (isDiff) {
+        const titleDiff = renderDiffView(rev.title, currentTitle);
+        const contentDiff = renderDiffView(rev.content, currentContent);
+        const tagsDiff = renderDiffView(
+            (rev.tags || []).join('\n'),
+            selectedTags.join('\n')
+        );
+        
+        const totalAdded = titleDiff.stats.added + contentDiff.stats.added + tagsDiff.stats.added;
+        const totalRemoved = titleDiff.stats.removed + contentDiff.stats.removed + tagsDiff.stats.removed;
+        
+        titleContent = `
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-arrows-collapse text-primary"></i>
+                <span>差异对比 #${rev.id} ↔ 当前版本</span>
+                <span class="ms-auto">
+                    <span class="badge bg-success me-1">+${totalAdded}</span>
+                    <span class="badge bg-danger">-${totalRemoved}</span>
+                </span>
+            </div>
+        `;
+        
+        bodyContent = `
+            <div class="diff-summary mb-3 p-2 bg-light rounded small">
+                <div class="row g-2">
+                    <div class="col-auto"><span class="diff-legend diff-legend-added"></span> 新增</div>
+                    <div class="col-auto"><span class="diff-legend diff-legend-removed"></span> 删除</div>
+                    <div class="col-auto"><span class="diff-legend diff-legend-equal"></span> 未变</div>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <h6 class="text-muted mb-2"><i class="bi bi-type"></i> 标题</h6>
+                <div class="diff-container rounded border">${titleDiff.html}</div>
+            </div>
+            
+            <div class="mb-4">
+                <h6 class="text-muted mb-2"><i class="bi bi-tags"></i> 标签</h6>
+                <div class="diff-container rounded border">${tagsDiff.html || '<div class="diff-line diff-equal"><span class="diff-sign"> </span>(无)</div>'}</div>
+            </div>
+            
+            <div>
+                <h6 class="text-muted mb-2"><i class="bi bi-file-text"></i> 内容</h6>
+                <div class="diff-container diff-content rounded border">${contentDiff.html}</div>
+            </div>
+        `;
+    } else {
+        titleContent = `
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-clock-history text-secondary"></i>
+                <span>历史版本 #${rev.id}</span>
+                <span class="ms-auto text-muted small">
+                    ${formatDate(rev.created_at)} · ${escapeHtml(rev.created_by || 'admin')}
+                </span>
+            </div>
+        `;
+        
+        const tagsHtml = (rev.tags || []).length > 0 
+            ? (rev.tags || []).map(t => `<span class="badge bg-secondary me-1">${escapeHtml(t)}</span>`).join('')
+            : '<span class="text-muted small">(无标签)</span>';
+        
+        bodyContent = `
+            <div class="mb-4">
+                <h6 class="text-muted mb-2"><i class="bi bi-type"></i> 标题</h6>
+                <div class="p-3 bg-light rounded">${escapeHtml(rev.title)}</div>
+            </div>
+            
+            <div class="mb-4">
+                <h6 class="text-muted mb-2"><i class="bi bi-tags"></i> 标签</h6>
+                <div class="p-3 bg-light rounded">${tagsHtml}</div>
+            </div>
+            
+            <div>
+                <h6 class="text-muted mb-2"><i class="bi bi-file-text"></i> 内容</h6>
+                <div class="p-3 bg-light rounded revision-content-preview">
+                    ${renderMarkdownSafe(rev.content)}
+                </div>
+            </div>
+        `;
+    }
+    
+    footerExtra = `
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+        <button type="button" class="btn btn-primary rollback-btn" data-id="${rev.id}">
+            <i class="bi bi-arrow-counterclockwise"></i> 回滚到此版本
+        </button>
+    `;
+    
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header border-bottom-0 pb-0">
+                        <h5 class="modal-title" id="${modalId}Label">${titleContent}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${bodyContent}
+                    </div>
+                    <div class="modal-footer border-top-0 pt-0">
+                        ${footerExtra}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modalEl = document.getElementById(modalId);
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+    
+    modalEl.querySelector('.rollback-btn').addEventListener('click', async () => {
+        const confirmed = confirm(`确定要回滚到版本 #${rev.id} 吗？\n当前未保存的修改会丢失，且当前版本会被保存为新的历史记录。`);
+        if (!confirmed) return;
+        
+        const btn = modalEl.querySelector('.rollback-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 回滚中...';
+        
+        try {
+            const result = await fetchApi('/admin/revisions.php', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'rollback',
+                    revision_id: rev.id
+                })
+            });
+            
+            modal.hide();
+            
+            document.getElementById('title').value = result.post.title;
+            document.getElementById('content').value = result.post.content;
+            selectedTags = result.post.tags || [];
+            currentPostSnapshot = {
+                title: result.post.title,
+                content: result.post.content,
+                tags: [...selectedTags]
+            };
+            renderSelectedTags();
+            adminUpdatePreview();
+            
+            selectedRevision = null;
+            showDiffMode = false;
+            loadRevisions();
+            
+            showAlert('回滚成功！', 'success');
+        } catch (error) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i> 回滚到此版本';
+            alert('回滚失败: ' + error.message);
+        }
+    });
+}
+
+function showAlert(message, type = 'danger') {
+    const alertBox = document.getElementById('alert-box');
+    if (!alertBox) return;
+    
+    const bsType = type === 'success' ? 'alert-success' : 
+                   type === 'warning' ? 'alert-warning' : 
+                   type === 'info' ? 'alert-info' : 'alert-danger';
+    
+    alertBox.innerHTML = `<div class="alert ${bsType} alert-dismissible fade show" role="alert">
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>`;
+    
+    setTimeout(() => {
+        const alerts = alertBox.querySelectorAll('.alert');
+        alerts.forEach(a => a.remove());
+    }, 5000);
+}
+
 function renderEditForm(post) {
     app.innerHTML = `
-    <div class="container mt-5 fade-in">
-        <div class="row justify-content-center">
-            <div class="col-lg-10 col-md-12">
+    <div class="container-fluid mt-4 fade-in px-4">
+        <div class="row g-4">
+            <div class="col-lg-3 col-xl-2 order-lg-1 order-2">
+                <div class="card shadow-sm border-0 sticky-top" style="top: 80px;">
+                    <div class="card-header bg-white border-bottom py-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-clock-history text-primary"></i>
+                            <h6 class="mb-0 fw-bold">版本历史</h6>
+                        </div>
+                    </div>
+                    <div class="card-body p-0" id="revision-sidebar">
+                        <div class="text-muted text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-muted mb-2" role="status"></div>
+                            <div><small>加载中...</small></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-9 col-xl-10 order-lg-2 order-1">
                 <div class="card shadow-lg border-0 rounded-lg">
                     <div class="card-header bg-white border-bottom-0 pt-4 pb-2 px-4">
                         <div class="d-flex justify-content-between align-items-center">
@@ -354,8 +740,12 @@ async function handleUpdate(e) {
     const title = document.getElementById('title').value.trim();
     const content = document.getElementById('content').value.trim();
     const alertBox = document.getElementById('alert-box');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
 
     try {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>保存中...';
+        
         await fetchApi('/admin/posts.php', {
             method: 'PUT',
             body: JSON.stringify({
@@ -365,9 +755,26 @@ async function handleUpdate(e) {
                 tags: selectedTags
             })
         });
-        window.location.href = '/admin/posts.html';
+        
+        currentPostSnapshot = {
+            title,
+            content,
+            tags: [...selectedTags]
+        };
+        
+        loadRevisions();
+        showAlert('保存成功！历史版本已记录。', 'success');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
         alertBox.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2-circle me-2" viewBox="0 0 16 16">
+              <path d="M2.5 8a5.5 5.5 0 0 1 8.25-4.764.5.5 0 0 0 .5-.866A6.5 6.5 0 1 0 14.5 8a.5.5 0 0 0-1 0 5.5 5.5 0 1 1-11 0z"/>
+              <path d="M15.354 3.354a.5.5 0 0 0-.708-.708L8 9.293 5.354 6.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l7-7z"/>
+            </svg>
+            保存修改
+        `;
     }
 }
-

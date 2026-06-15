@@ -2166,3 +2166,152 @@ mark.ann-mark-annotated:hover {
         padding: 0.5rem 0;
     }
 }
+
+.revision-item {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+}
+
+.revision-item:last-child {
+    border-bottom: none;
+}
+
+.revision-item:hover {
+    background-color: #f9fafb;
+}
+
+.revision-item.active {
+    background-color: #eef2ff;
+    border-left: 3px solid var(--primary-color);
+}
+
+.revision-list {
+    max-height: 65vh;
+    overflow-y: auto;
+}
+
+.revision-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.revision-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.revision-list::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 3px;
+}
+
+.diff-container {
+    background: #fafafa;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: auto;
+}
+
+.diff-content {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.diff-line {
+    padding: 2px 12px 2px 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.diff-sign {
+    flex-shrink: 0;
+    width: 16px;
+    font-weight: bold;
+    user-select: none;
+    text-align: center;
+}
+
+.diff-added {
+    background-color: #ecfdf5;
+    color: #065f46;
+}
+
+.diff-added .diff-sign {
+    color: #059669;
+}
+
+.diff-removed {
+    background-color: #fef2f2;
+    color: #991b1b;
+}
+
+.diff-removed .diff-sign {
+    color: #dc2626;
+}
+
+.diff-equal {
+    background-color: transparent;
+    color: #374151;
+}
+
+.diff-equal .diff-sign {
+    color: #9ca3af;
+}
+
+.diff-legend {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.diff-legend-added {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+}
+
+.diff-legend-removed {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.diff-legend-equal {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+
+.revision-content-preview {
+    max-height: 500px;
+    overflow-y: auto;
+    font-size: 14px;
+}
+
+.revision-content-preview img {
+    max-width: 100%;
+    height: auto;
+}
+
+.revision-content-preview pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.revision-content-preview code {
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.revision-content-preview blockquote {
+    border-left: 4px solid #d1d5db;
+    padding-left: 12px;
+    color: #6b7280;
+    margin: 12px 0;
+}
