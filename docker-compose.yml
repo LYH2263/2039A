@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:5.7
+    container_name: forum_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: www.17speed.vip
+      MYSQL_USER: www.17speed.vip
+      MYSQL_PASSWORD: 19821230a
+      MYSQL_ROOT_PASSWORD: root_password_secure
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./backend/database.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - forum_net
+
+  backend:
+    build: ./backend
+    container_name: forum_backend
+    restart: always
+    environment:
+      DB_HOST: db
+      DB_NAME: www.17speed.vip
+      DB_USER: www.17speed.vip
+      DB_PASS: 19821230a
+    ports:
+      - "8000:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - forum_net
+
+  frontend:
+    build: ./frontend
+    container_name: forum_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - forum_net
+
+volumes:
+  db_data:
+
+networks:
+  forum_net:
+    driver: bridge

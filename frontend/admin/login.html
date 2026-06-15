@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台登录 - 极简论坛</title>
+    <link href="https://cdn.osyb.cn/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.osyb.cn/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="login-page">
+    <div class="card login-card fade-in">
+        <div class="card-body">
+            <h3 class="text-center mb-4 fw-bold text-primary">后台登录</h3>
+            <div id="alert-box"></div>
+            <form id="login-form">
+                <div class="mb-3">
+                    <label for="username" class="form-label">用户名</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">密码</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">登录</button>
+                </div>
+            </form>
+            <div class="text-center mt-3">
+                <a href="/" class="text-muted">返回前台首页</a>
+            </div>
+            
+            <div class="alert alert-light border mt-4 mb-0 small">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong class="text-muted">测试账号：</strong><br>
+                        <span class="text-secondary">用户：admin</span><br>
+                        <span class="text-secondary">密码：123456</span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="auto-fill-btn">
+                        <i class="bi bi-magic"></i> 一键填入
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.osyb.cn/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="/src/admin_login.js"></script>
+</body>
+</html>
