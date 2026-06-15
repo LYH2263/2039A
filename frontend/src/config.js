@@ -29,3 +29,8 @@ export async function fetchApi(endpoint, options = {}) {
 export function formatDate(dateString) {
     return new Date(dateString).toLocaleString();
 }
+
+export function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}

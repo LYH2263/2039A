@@ -776,3 +776,482 @@ mark.ann-mark-annotated:hover {
         height: 20px;
     }
 }
+
+/* ===== View Toggle ===== */
+.view-toggle-group {
+    display: inline-flex;
+    background: #f3f4f6;
+    border-radius: 20px;
+    padding: 4px;
+    gap: 2px;
+}
+
+.view-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+}
+
+.view-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.view-toggle-btn.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+/* ===== Mind Map Container ===== */
+.mindmap-wrapper {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    border: 1px solid #e2e8f0;
+}
+
+.mindmap-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.mindmap-toolbar-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-main);
+    transition: all 0.15s ease;
+}
+
+.mindmap-toolbar-btn:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.mindmap-toolbar-separator {
+    width: 1px;
+    height: 20px;
+    background: #e5e7eb;
+    margin: 0 4px;
+}
+
+.mindmap-zoom-level {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 40px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.mindmap-node-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding-left: 8px;
+    border-left: 1px solid #e5e7eb;
+}
+
+.mindmap-canvas-container {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    overflow: hidden;
+}
+
+.mindmap-canvas-container:active {
+    cursor: grabbing;
+}
+
+.mindmap-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.mindmap-viewport {
+    transition: transform 0.1s ease-out;
+}
+
+.mindmap-link {
+    fill: none;
+    stroke: #94a3b8;
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke 0.2s ease;
+}
+
+.mindmap-node {
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.mindmap-node:hover {
+    transform: scale(1.02);
+}
+
+.mindmap-node.highlighted .node-bg {
+    stroke: #f59e0b !important;
+    stroke-width: 3 !important;
+    animation: pulse 0.5s ease-in-out 3;
+}
+
+@keyframes pulse {
+    0%, 100% { stroke-opacity: 1; }
+    50% { stroke-opacity: 0.5; }
+}
+
+.node-bg {
+    fill: white;
+    stroke: #e2e8f0;
+    stroke-width: 2;
+    transition: all 0.2s ease;
+}
+
+.root-node .node-bg {
+    fill: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    fill: #4f46e5;
+    stroke: #4338ca;
+}
+
+.comment-node .node-bg {
+    fill: #eff6ff;
+    stroke: #3b82f6;
+}
+
+.reply-node .node-bg {
+    fill: #f0fdf4;
+    stroke: #22c55e;
+}
+
+.aggregation-bg {
+    fill: #fef3c7 !important;
+    stroke: #f59e0b !important;
+    stroke-dasharray: 5, 3;
+}
+
+.node-content {
+    width: 100%;
+    height: 100%;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+    font-family: inherit;
+}
+
+.root-node .node-content {
+    color: white;
+}
+
+.node-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.node-author {
+    font-weight: 600;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.node-badge {
+    background: rgba(0, 0, 0, 0.1);
+    color: inherit;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.comment-node .node-badge,
+.reply-node .node-badge {
+    background: var(--primary-color);
+    color: white;
+}
+
+.node-summary {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    flex: 1;
+}
+
+.root-node .node-summary {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.node-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.root-node .node-meta {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.node-expand-btn {
+    cursor: pointer;
+}
+
+.expand-btn-bg {
+    fill: white;
+    stroke: #d1d5db;
+    stroke-width: 2;
+    transition: all 0.15s ease;
+}
+
+.node-expand-btn:hover .expand-btn-bg {
+    fill: var(--primary-color);
+    stroke: var(--primary-color);
+}
+
+.node-expand-btn:hover .expand-btn-icon {
+    fill: white;
+}
+
+.expand-btn-icon {
+    font-size: 14px;
+    font-weight: 700;
+    fill: var(--text-muted);
+    pointer-events: none;
+}
+
+.aggregation-btn-bg {
+    fill: #fef3c7 !important;
+    stroke: #f59e0b !important;
+}
+
+.aggregation-content {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.aggregation-icon {
+    font-size: 1.2rem;
+    color: #f59e0b;
+}
+
+.aggregation-text {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #92400e;
+}
+
+.aggregation-text strong {
+    color: #d97706;
+    font-size: 1rem;
+}
+
+.aggregation-hint {
+    font-size: 0.7rem;
+    color: #b45309;
+    opacity: 0.7;
+}
+
+.mindmap-legend {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    gap: 16px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    font-size: 0.75rem;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.legend-root {
+    background: #4f46e5;
+}
+
+.legend-comment {
+    background: #3b82f6;
+}
+
+.legend-reply {
+    background: #22c55e;
+}
+
+/* ===== Comment List with Hierarchy ===== */
+.comment-item {
+    position: relative;
+}
+
+.comment-item.with-replies::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 70px;
+    bottom: 20px;
+    width: 2px;
+    background: #e5e7eb;
+}
+
+.reply-container {
+    margin-left: 40px;
+    position: relative;
+}
+
+.reply-container::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 35px;
+    width: 20px;
+    height: 2px;
+    background: #e5e7eb;
+}
+
+.reply-item {
+    background: #fafafa !important;
+    border-left: 3px solid #e5e7eb !important;
+}
+
+.reply-item:hover {
+    border-left-color: var(--primary-color) !important;
+}
+
+.reply-to-badge {
+    display: inline-block;
+    background: #f3f4f6;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+/* ===== Empty State ===== */
+.empty-mindmap {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.empty-mindmap-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.empty-mindmap-text {
+    font-size: 1rem;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .mindmap-wrapper {
+        height: 450px;
+    }
+
+    .mindmap-toolbar {
+        padding: 6px 8px;
+        gap: 4px;
+    }
+
+    .mindmap-toolbar-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+
+    .mindmap-legend {
+        font-size: 0.65rem;
+        padding: 6px 10px;
+        gap: 10px;
+    }
+
+    .view-toggle-btn span {
+        display: none;
+    }
+
+    .view-toggle-btn {
+        padding: 6px 10px;
+    }
+
+    .reply-container {
+        margin-left: 20px;
+    }
+
+    .reply-container::before {
+        left: -10px;
+    }
+
+    .comment-item.with-replies::before {
+        left: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .mindmap-wrapper {
+        height: 380px;
+    }
+
+    .mindmap-node-count {
+        display: none;
+    }
+}

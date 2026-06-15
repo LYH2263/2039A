@@ -1,6 +1,7 @@
-import { fetchApi, formatDate } from './config.js';
+import { fetchApi, formatDate, escapeHtml } from './config.js';
 import { renderHeader } from './header.js';
 import { DanmakuEngine } from './danmaku.js';
+import { CommentMindMap } from './mindmap.js';
 
 renderHeader();
 
@@ -17,6 +18,11 @@ let danmakuMaxId = 0;
 let isDanmakuMode = false;
 let currentPostData = null;
 let allComments = [];
+let commentTreeData = null;
+let currentViewMode = 'list';
+let mindMapInstance = null;
+let replyToCommentId = null;
+let authorMap = new Map();
 
 if (!postId) {
     app.innerHTML = '<div class="alert alert-danger">无效的帖子ID</div>';
@@ -26,24 +32,29 @@ if (!postId) {
 
 async function loadPost(id) {
     try {
-        const [postData, annotationData] = await Promise.all([
+        const [postData, annotationData, treeData] = await Promise.all([
             fetchApi(`/post.php?id=${id}`),
-            fetchApi(`/annotations.php?post_id=${id}`)
+            fetchApi(`/annotations.php?post_id=${id}`),
+            fetchApi(`/comments.php?post_id=${id}&view=tree`)
         ]);
         currentAnnotations = annotationData.annotations || [];
         currentPostData = postData;
         allComments = postData.comments || [];
+        commentTreeData = treeData;
         danmakuMaxId = allComments.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0);
+        
+        authorMap.clear();
+        allComments.forEach(c => {
+            authorMap.set(Number(c.id), c.author_name);
+        });
+        
         renderPost(postData);
     } catch (error) {
         app.innerHTML = `<div class="alert alert-danger">加载失败: ${error.message}</div>`;
     }
 }
 
-function escapeHtml(text) {
-    if (!text) return '';
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+
 
 function buildHighlightedHtml(rawContent, annotations) {
     const validated = validateAnnotations(rawContent, annotations);
@@ -126,6 +137,153 @@ function getTextOffset(container, node, offset) {
     return -1;
 }
 
+function buildCommentTree(comments) {
+    const map = new Map();
+    const roots = [];
+    
+    comments.forEach(c => {
+        map.set(Number(c.id), { ...c, children: [] });
+    });
+    
+    comments.forEach(c => {
+        const node = map.get(Number(c.id));
+        if (c.parent_id && map.has(Number(c.parent_id))) {
+            map.get(Number(c.parent_id)).children.push(node);
+        } else {
+            roots.push(node);
+        }
+    });
+    
+    return roots;
+}
+
+function renderCommentListWithHierarchy(comments) {
+    if (comments.length === 0) {
+        return `<p class="text-muted mb-4">暂无评论，抢沙发！</p>`;
+    }
+    
+    const tree = buildCommentTree(comments);
+    
+    const renderNode = (node, depth = 0) => {
+        const hasChildren = node.children && node.children.length > 0;
+        const isReply = node.parent_id !== null && node.parent_id !== undefined;
+        
+        let html = `
+            <div class="comment-item ${hasChildren ? 'with-replies' : ''}" data-comment-id="${node.id}">
+                <div class="card mb-3 ${isReply ? 'reply-item' : 'bg-light'}">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <strong>${escapeHtml(node.author_name)}</strong>
+                                    ${isReply && authorMap.has(Number(node.parent_id)) ? 
+                                        `<span class="reply-to-badge">回复 @${escapeHtml(authorMap.get(Number(node.parent_id)))}</span>` : ''}
+                                </div>
+                                <p class="mb-0 mt-1">${escapeHtml(node.content)}</p>
+                                <div class="d-flex gap-3 mt-2">
+                                    <small class="text-muted">${formatDate(node.created_at)}</small>
+                                    <button class="btn btn-sm btn-link p-0 reply-btn" data-comment-id="${node.id}">
+                                        <i class="bi bi-reply"></i> 回复
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (hasChildren) {
+            html += `<div class="reply-container">`;
+            node.children.forEach(child => {
+                html += renderNode(child, depth + 1);
+            });
+            html += `</div>`;
+        }
+        
+        return html;
+    };
+    
+    return tree.map(node => renderNode(node)).join('');
+}
+
+function renderEmptyMindmap() {
+    return `
+        <div class="mindmap-wrapper">
+            <div class="empty-mindmap">
+                <div class="empty-mindmap-icon">
+                    <i class="bi bi-diagram-3"></i>
+                </div>
+                <div class="empty-mindmap-text">暂无评论，成为第一个评论者吧！</div>
+            </div>
+        </div>
+    `;
+}
+
+function switchViewMode(mode) {
+    if (mode === currentViewMode) return;
+    
+    currentViewMode = mode;
+    
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === mode);
+    });
+    
+    const listView = document.getElementById('comments-list-view');
+    const mindmapView = document.getElementById('comments-mindmap-view');
+    
+    if (mode === 'list') {
+        listView.classList.remove('d-none');
+        mindmapView.classList.add('d-none');
+        if (mindMapInstance) {
+            mindMapInstance.destroy();
+            mindMapInstance = null;
+        }
+    } else {
+        listView.classList.add('d-none');
+        mindmapView.classList.remove('d-none');
+        initMindMap();
+    }
+}
+
+function initMindMap() {
+    const container = document.getElementById('mindmap-container');
+    if (!container || !commentTreeData || !commentTreeData.tree) return;
+    
+    if (mindMapInstance) {
+        mindMapInstance.destroy();
+    }
+    
+    mindMapInstance = new CommentMindMap(container, {
+        onNodeClick: (node) => {
+            if (node.type === 'root') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (node.type !== 'aggregation') {
+                switchViewMode('list');
+                setTimeout(() => scrollToComment(node.id), 100);
+            }
+        },
+        onNodeDoubleClick: (node) => {
+        }
+    });
+    
+    mindMapInstance.setData(commentTreeData.tree, currentPostData.post);
+}
+
+function scrollToComment(commentId) {
+    const commentEl = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (commentEl) {
+        commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        commentEl.style.transition = 'box-shadow 0.3s ease';
+        commentEl.querySelector('.card').style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.3)';
+        setTimeout(() => {
+            if (commentEl.querySelector('.card')) {
+                commentEl.querySelector('.card').style.boxShadow = '';
+            }
+        }, 2000);
+    }
+}
+
 function renderPost({ post, comments }) {
     document.title = `${post.title} - 极简论坛`;
 
@@ -163,36 +321,40 @@ function renderPost({ post, comments }) {
                 </div>
 
                 <div id="comments-section">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                         <h4 class="mb-0">评论区 (${comments.length})</h4>
-                    </div>
-                    <div id="comments-list">
-    `;
-
-    if (comments.length === 0) {
-        html += `<p class="text-muted mb-4">暂无评论，抢沙发！</p>`;
-    } else {
-        comments.forEach(comment => {
-            html += `
-                <div class="card mb-3 bg-light">
-                    <div class="card-body py-2">
-                        <div class="d-flex justify-content-between">
-                            <strong>${escapeHtml(comment.author_name)}</strong>
-                            <small class="text-muted">${formatDate(comment.created_at)}</small>
+                        <div class="view-toggle-group" role="tablist">
+                            <button class="view-toggle-btn ${currentViewMode === 'list' ? 'active' : ''}" data-view="list" role="tab">
+                                <i class="bi bi-list"></i> <span>列表</span>
+                            </button>
+                            <button class="view-toggle-btn ${currentViewMode === 'mindmap' ? 'active' : ''}" data-view="mindmap" role="tab">
+                                <i class="bi bi-diagram-3"></i> <span>思维导图</span>
+                            </button>
                         </div>
-                        <p class="mb-0 mt-1">${escapeHtml(comment.content)}</p>
                     </div>
-                </div>
-            `;
-        });
-    }
-
-    html += `
+                    
+                    <div id="comments-list-view" class="${currentViewMode === 'list' ? '' : 'd-none'}">
+                        ${renderCommentListWithHierarchy(comments)}
+                    </div>
+                    
+                    <div id="comments-mindmap-view" class="${currentViewMode === 'mindmap' ? '' : 'd-none'}">
+                        ${commentTreeData && commentTreeData.tree && commentTreeData.tree.length > 0 ? 
+                            '<div id="mindmap-container"></div>' : 
+                            renderEmptyMindmap()}
                     </div>
                 </div>
 
                 <div class="card mt-4">
-                    <div class="card-header">发表评论</div>
+                    <div class="card-header">
+                        ${replyToCommentId ? 
+                            `<div class="d-flex justify-content-between align-items-center">
+                                <span>回复 <strong>@${escapeHtml(authorMap.get(replyToCommentId) || '评论')}</strong></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="cancel-reply-btn">
+                                    <i class="bi bi-x"></i> 取消
+                                </button>
+                            </div>` : 
+                            '发表评论'}
+                    </div>
                     <div class="card-body">
                         <div id="alert-box"></div>
                         <form id="comment-form">
@@ -202,9 +364,9 @@ function renderPost({ post, comments }) {
                             </div>
                             <div class="mb-3">
                                 <label for="content" class="form-label">评论内容 <span class="text-danger">*</span></label>
-                                <textarea class="form-control" id="content" rows="3" required></textarea>
+                                <textarea class="form-control" id="content" rows="3" required placeholder="${replyToCommentId ? '写下你的回复...' : '写下你的评论...'}"></textarea>
                             </div>
-                            <button type="submit" class="btn btn-primary">提交评论</button>
+                            <button type="submit" class="btn btn-primary">${replyToCommentId ? '提交回复' : '提交评论'}</button>
                         </form>
                     </div>
                 </div>
@@ -238,6 +400,62 @@ function renderPost({ post, comments }) {
     initAnnotationUI(post);
     document.getElementById('comment-form').addEventListener('submit', handleCommentSubmit);
     initDanmakuUI();
+    
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchViewMode(btn.dataset.view);
+        });
+    });
+    
+    document.querySelectorAll('.reply-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = Number(btn.dataset.commentId);
+            startReply(commentId);
+        });
+    });
+    
+    const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+    if (cancelReplyBtn) {
+        cancelReplyBtn.addEventListener('click', cancelReply);
+    }
+    
+    if (currentViewMode === 'mindmap' && commentTreeData && commentTreeData.tree && commentTreeData.tree.length > 0) {
+        setTimeout(() => initMindMap(), 50);
+    }
+}
+
+function startReply(commentId) {
+    replyToCommentId = commentId;
+    renderPost(currentPostData);
+    
+    const contentTextarea = document.getElementById('content');
+    if (contentTextarea) {
+        contentTextarea.focus();
+    }
+}
+
+function cancelReply() {
+    replyToCommentId = null;
+    renderPost(currentPostData);
+}
+
+function refreshComments() {
+    return Promise.all([
+        fetchApi(`/post.php?id=${postId}`),
+        fetchApi(`/comments.php?post_id=${postId}&view=tree`)
+    ]).then(([postData, treeData]) => {
+        currentPostData = postData;
+        allComments = postData.comments || [];
+        commentTreeData = treeData;
+        
+        authorMap.clear();
+        allComments.forEach(c => {
+            authorMap.set(Number(c.id), c.author_name);
+        });
+        
+        renderPost(currentPostData);
+    });
 }
 
 function initAnnotationUI(post) {
@@ -552,30 +770,42 @@ async function handleCommentSubmit(e) {
     const alertBox = document.getElementById('alert-box');
 
     try {
+        const body = {
+            post_id: postId,
+            nickname,
+            content
+        };
+        
+        if (replyToCommentId) {
+            body.parent_id = replyToCommentId;
+        }
+
         const result = await fetchApi('/comments.php', {
             method: 'POST',
-            body: JSON.stringify({
-                post_id: postId,
-                nickname,
-                content
-            })
+            body: JSON.stringify(body)
         });
 
         document.getElementById('content').value = '';
-        alertBox.innerHTML = `<div class="alert alert-success">评论发布成功！</div>`;
+        const successMsg = replyToCommentId ? '回复发布成功！' : '评论发布成功！';
+        alertBox.innerHTML = `<div class="alert alert-success">${successMsg}</div>`;
         setTimeout(() => {
             const alertEl = alertBox.querySelector('.alert');
             if (alertEl) alertEl.remove();
         }, 2000);
 
+        replyToCommentId = null;
+        
         if (result.comment) {
             const newComment = result.comment;
             allComments.push(newComment);
+            authorMap.set(Number(newComment.id), newComment.author_name);
+            
             if (Number(newComment.id) > danmakuMaxId) {
                 danmakuMaxId = Number(newComment.id);
             }
-            appendCommentToList(newComment);
-            updateCommentCount();
+            
+            refreshComments();
+            
             if (isDanmakuMode && danmakuEngine) {
                 danmakuEngine.addComment(newComment, true);
             }
@@ -721,20 +951,28 @@ async function pollNewComments() {
         const data = await fetchApi(`/comments.php?post_id=${postId}&since_id=${danmakuMaxId}`);
         if (data.comments && data.comments.length > 0) {
             const existingIds = new Set(allComments.map(c => String(c.id)));
+            let hasNewComments = false;
+            
             data.comments.forEach(comment => {
                 const cid = String(comment.id);
                 if (!existingIds.has(cid)) {
                     allComments.push(comment);
-                    appendCommentToList(comment);
-                    existingIds.add(cid);
+                    authorMap.set(Number(comment.id), comment.author_name);
+                    hasNewComments = true;
                 }
                 if (danmakuEngine) {
                     danmakuEngine.addComment(comment, true);
                 }
             });
+            
             if (Number(data.max_id) > danmakuMaxId) {
                 danmakuMaxId = Number(data.max_id);
             }
+            
+            if (hasNewComments && currentViewMode === 'list') {
+                renderPost(currentPostData);
+            }
+            
             updateCommentCount();
         }
     } catch (err) {
