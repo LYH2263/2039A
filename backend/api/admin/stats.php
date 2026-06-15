@@ -19,12 +19,14 @@ check_admin_auth();
 
 $conn = get_db_connection();
 
-// 核心逻辑：统计帖子和评论数量
+// 核心逻辑：统计帖子、评论、举报数量
 $post_count = $conn->query("SELECT COUNT(*) as count FROM posts")->fetch_assoc()['count'];
 $comment_count = $conn->query("SELECT COUNT(*) as count FROM comments")->fetch_assoc()['count'];
+$pending_report_count = $conn->query("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'")->fetch_assoc()['count'];
 
 jsonResponse([
     'post_count' => $post_count,
-    'comment_count' => $comment_count
+    'comment_count' => $comment_count,
+    'pending_report_count' => $pending_report_count
 ]);
 ?>

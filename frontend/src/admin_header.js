@@ -18,6 +18,28 @@ export function renderAdminHeader(activeLink = '') {
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto align-items-center ms-lg-4">
+                    <li class="nav-item me-1">
+                        <a class="nav-link px-3 rounded-pill ${activeLink === 'dashboard' ? 'active bg-primary text-white' : 'hover-bg-light'}" href="/admin/index.html">
+                            <i class="bi bi-speedometer2 me-1"></i> 仪表盘
+                        </a>
+                    </li>
+                    <li class="nav-item me-1">
+                        <a class="nav-link px-3 rounded-pill ${activeLink === 'posts' ? 'active bg-primary text-white' : 'hover-bg-light'}" href="/admin/posts.html">
+                            <i class="bi bi-file-text me-1"></i> 帖子
+                        </a>
+                    </li>
+                    <li class="nav-item me-1">
+                        <a class="nav-link px-3 rounded-pill ${activeLink === 'comments' ? 'active bg-primary text-white' : 'hover-bg-light'}" href="/admin/comments.html">
+                            <i class="bi bi-chat-dots me-1"></i> 评论
+                        </a>
+                    </li>
+                    <li class="nav-item me-1">
+                        <a class="nav-link px-3 rounded-pill ${activeLink === 'reports' ? 'active bg-primary text-white' : 'hover-bg-light'}" href="/admin/reports.html" id="nav-reports-link">
+                            <i class="bi bi-flag me-1"></i> 举报
+                        </a>
+                    </li>
+                </ul>
                 <ul class="navbar-nav ms-auto align-items-center">
                     <li class="nav-item me-2">
                         <a class="nav-link px-3 rounded-pill hover-bg-light" href="/" target="_blank">
@@ -34,6 +56,18 @@ export function renderAdminHeader(activeLink = '') {
         </div>
     `;
     document.body.prepend(nav);
+
+    const reportsLink = nav.querySelector('#nav-reports-link');
+    if (reportsLink) {
+        fetchApi('/admin/stats.php').then(stats => {
+            if (stats.pending_report_count > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-danger ms-1';
+                badge.textContent = stats.pending_report_count;
+                reportsLink.appendChild(badge);
+            }
+        }).catch(() => {});
+    }
 
     document.getElementById('logout-btn').addEventListener('click', async (e) => {
         e.preventDefault();

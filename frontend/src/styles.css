@@ -456,6 +456,73 @@ mark.ann-mark-annotated:hover {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* ===== Report Modal ===== */
+.report-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10001;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: ann-fade-in 0.2s ease;
+}
+
+.report-modal {
+    background: #fff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 460px;
+    max-width: 92vw;
+    max-height: 90vh;
+    overflow: hidden;
+    animation: ann-slide-up 0.25s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.report-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    font-weight: 600;
+    font-size: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.report-modal-close {
+    border: none;
+    background: transparent;
+    font-size: 1.5rem;
+    color: #9ca3af;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 0.15s ease;
+}
+
+.report-modal-close:hover {
+    color: #374151;
+}
+
+.report-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.report-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+    flex-shrink: 0;
+}
+
 /* ===== Danmaku Switch ===== */
 .danmaku-switch {
     display: inline-flex;

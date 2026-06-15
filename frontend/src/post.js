@@ -28,6 +28,17 @@ let replyToCommentId = null;
 let authorMap = new Map();
 let expandedReplies = new Set();
 
+const REPORT_REASONS = [
+    { value: 'spam', label: '垃圾广告/营销' },
+    { value: 'abuse', label: '辱骂/人身攻击' },
+    { value: 'porn', label: '色情低俗内容' },
+    { value: 'violence', label: '暴力血腥内容' },
+    { value: 'illegal', label: '违法违规内容' },
+    { value: 'privacy', label: '侵犯隐私' },
+    { value: 'copyright', label: '侵犯版权' },
+    { value: 'other', label: '其他问题' }
+];
+
 if (!postId) {
     app.innerHTML = '<div class="alert alert-danger">无效的帖子ID</div>';
 } else {
@@ -206,10 +217,13 @@ function renderCommentListWithHierarchy(comments) {
                                         `<span class="reply-to-badge">回复 @${escapeHtml(authorMap.get(Number(node.parent_id)))}</span>` : ''}
                                 </div>
                                 <p class="mb-0 mt-1">${escapeHtml(node.content)}</p>
-                                <div class="d-flex gap-3 mt-2">
+                                <div class="d-flex gap-3 mt-2 align-items-center flex-wrap">
                                     <small class="text-muted">${formatDate(node.created_at)}</small>
                                     <button class="btn btn-sm btn-link p-0 reply-btn" data-comment-id="${node.id}">
                                         <i class="bi bi-reply"></i> 回复
+                                    </button>
+                                    <button class="btn btn-sm btn-link p-0 text-danger report-comment-btn" data-comment-id="${node.id}" title="举报评论">
+                                        <i class="bi bi-flag"></i> 举报
                                     </button>
                                 </div>
                             </div>
@@ -268,6 +282,104 @@ function countDescendants(node) {
         count += countDescendants(child);
     });
     return count;
+}
+
+function openReportModal(targetType, targetId) {
+    const existing = document.getElementById('report-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'report-modal';
+    modal.className = 'report-modal-overlay';
+
+    const targetLabel = targetType === 'post' ? '帖子' : '评论';
+
+    modal.innerHTML = `
+        <div class="report-modal">
+            <div class="report-modal-header">
+                <span><i class="bi bi-flag-fill text-danger me-2"></i>举报${targetLabel}</span>
+                <button class="report-modal-close" id="report-modal-close">&times;</button>
+            </div>
+            <div class="report-modal-body">
+                <div class="mb-3">
+                    <label class="form-label">您的昵称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="report-nickname" required 
+                           placeholder="请输入您的昵称" 
+                           value="${escapeHtml(notificationManager.nickname || '')}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">举报理由 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="report-reason" required>
+                        <option value="">请选择举报理由</option>
+                        ${REPORT_REASONS.map(r => `<option value="${r.value}">${r.label}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">补充说明</label>
+                    <textarea class="form-control" id="report-remark" rows="3" 
+                              placeholder="可选，请详细说明问题"></textarea>
+                </div>
+                <div id="report-alert"></div>
+            </div>
+            <div class="report-modal-footer">
+                <button class="btn btn-outline-secondary" id="report-cancel-btn">取消</button>
+                <button class="btn btn-danger" id="report-submit-btn">
+                    <i class="bi bi-send me-1"></i>提交举报
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#report-modal-close').addEventListener('click', () => modal.remove());
+    modal.querySelector('#report-cancel-btn').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+
+    modal.querySelector('#report-submit-btn').addEventListener('click', async () => {
+        const nickname = modal.querySelector('#report-nickname').value.trim();
+        const reason = modal.querySelector('#report-reason').value;
+        const remark = modal.querySelector('#report-remark').value.trim();
+        const alertBox = modal.querySelector('#report-alert');
+
+        if (!nickname) {
+            alertBox.innerHTML = `<div class="alert alert-warning py-2">请输入您的昵称</div>`;
+            return;
+        }
+        if (!reason) {
+            alertBox.innerHTML = `<div class="alert alert-warning py-2">请选择举报理由</div>`;
+            return;
+        }
+
+        const submitBtn = modal.querySelector('#report-submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>提交中...';
+
+        try {
+            await fetchApi('/reports.php', {
+                method: 'POST',
+                body: JSON.stringify({
+                    target_type: targetType,
+                    target_id: targetId,
+                    reporter_name: nickname,
+                    reason: reason,
+                    remark: remark || null
+                })
+            });
+
+            if (nickname && !notificationManager.nickname) {
+                notificationManager.setNickname(nickname);
+            }
+
+            alertBox.innerHTML = `<div class="alert alert-success py-2">举报提交成功！我们会尽快处理。</div>`;
+            setTimeout(() => modal.remove(), 1500);
+        } catch (error) {
+            alertBox.innerHTML = `<div class="alert alert-danger py-2">${escapeHtml(error.message)}</div>`;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-send me-1"></i>提交举报';
+        }
+    });
 }
 
 function renderEmptyMindmap() {
@@ -409,9 +521,12 @@ function renderPost({ post, comments }) {
 
                 <div class="card mb-4">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                            <h1 class="card-title mb-0">${escapeHtml(post.title)}</h1>
+                        <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                            <h1 class="card-title mb-0 flex-grow-1">${escapeHtml(post.title)}</h1>
                             <div class="d-flex gap-2 align-items-center">
+                                <button class="btn btn-sm btn-outline-danger report-post-btn" data-post-id="${post.id}" title="举报帖子">
+                                    <i class="bi bi-flag"></i> 举报
+                                </button>
                                 <label class="danmaku-switch form-check form-switch mb-0" title="开启弹幕模式">
                                     <input class="form-check-input" type="checkbox" id="danmaku-toggle" role="switch">
                                     <span class="form-check-label danmaku-switch-label" for="danmaku-toggle">
@@ -546,6 +661,23 @@ function renderPost({ post, comments }) {
     if (cancelReplyBtn) {
         cancelReplyBtn.addEventListener('click', cancelReply);
     }
+    
+    const reportPostBtn = document.querySelector('.report-post-btn');
+    if (reportPostBtn) {
+        reportPostBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const postId = Number(reportPostBtn.dataset.postId);
+            openReportModal('post', postId);
+        });
+    }
+    
+    document.querySelectorAll('.report-comment-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = Number(btn.dataset.commentId);
+            openReportModal('comment', commentId);
+        });
+    });
     
     if (currentViewMode === 'mindmap' && commentTreeData && commentTreeData.tree && commentTreeData.tree.length > 0) {
         setTimeout(() => initMindMap(), 50);

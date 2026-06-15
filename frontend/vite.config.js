@@ -14,6 +14,7 @@ export default defineConfig({
         admin_posts: resolve(__dirname, 'admin/posts.html'),
         admin_comments: resolve(__dirname, 'admin/comments.html'),
         admin_edit: resolve(__dirname, 'admin/edit_post.html'),
+        admin_reports: resolve(__dirname, 'admin/reports.html'),
       }
     }
   }
