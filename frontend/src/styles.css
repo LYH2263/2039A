@@ -455,3 +455,324 @@ mark.ann-mark-annotated:hover {
     from { opacity: 0; transform: translateY(16px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ===== Danmaku Switch ===== */
+.danmaku-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: #f3f4f6;
+    transition: background 0.2s ease;
+}
+
+.danmaku-switch:hover {
+    background: #e5e7eb;
+}
+
+.danmaku-switch .form-check-input {
+    width: 2.5em;
+    height: 1.3em;
+    cursor: pointer;
+    margin: 0;
+}
+
+.danmaku-switch .form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.danmaku-switch-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-main);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+/* ===== Danmaku Stage ===== */
+.danmaku-active {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+    color: #f1f5f9 !important;
+    border-radius: var(--radius-md);
+    padding: 24px !important;
+    min-height: 300px;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+.danmaku-active mark.ann-mark {
+    opacity: 0.7;
+}
+
+.danmaku-stage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: hidden;
+}
+
+/* ===== Danmaku Items ===== */
+.danmaku-item {
+    position: absolute;
+    left: 0;
+    white-space: nowrap;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 1;
+    padding: 4px 10px;
+    border-radius: 6px;
+    pointer-events: auto;
+    text-shadow:
+        -1px -1px 0 rgba(0, 0, 0, 0.85),
+        1px -1px 0 rgba(0, 0, 0, 0.85),
+        -1px 1px 0 rgba(0, 0, 0, 0.85),
+        1px 1px 0 rgba(0, 0, 0, 0.85),
+        0 0 6px rgba(0, 0, 0, 0.7),
+        0 2px 4px rgba(0, 0, 0, 0.5);
+    -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(2px);
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+}
+
+.danmaku-item-enter {
+    animation: danmaku-fade-in 0.3s ease-out;
+}
+
+@keyframes danmaku-fade-in {
+    from {
+        opacity: 0;
+        filter: blur(4px);
+    }
+    to {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+/* ===== Danmaku Controls ===== */
+.danmaku-controls {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9500;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 10px 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    animation: danmaku-controls-up 0.3s ease-out;
+}
+
+@keyframes danmaku-controls-up {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.danmaku-controls-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.danmaku-ctrl-btn {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: all 0.15s ease;
+}
+
+.danmaku-ctrl-btn:hover {
+    transform: translateY(-1px);
+}
+
+.danmaku-slider-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    padding: 4px 10px;
+    border-radius: 10px;
+}
+
+.danmaku-slider-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+}
+
+.danmaku-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 4px;
+    background: #d1d5db;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.danmaku-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.danmaku-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 3px 10px rgba(79, 70, 229, 0.5);
+}
+
+.danmaku-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4);
+}
+
+.danmaku-slider-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+    .danmaku-switch {
+        padding: 4px 10px;
+        border-radius: 16px;
+    }
+
+    .danmaku-switch-label {
+        font-size: 0.8rem;
+    }
+
+    .danmaku-switch-label span {
+        display: none;
+    }
+
+    .danmaku-active {
+        padding: 16px !important;
+        min-height: 200px;
+    }
+
+    .danmaku-item {
+        font-size: 13px !important;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-shadow:
+            -0.5px -0.5px 0 rgba(0, 0, 0, 0.9),
+            0.5px -0.5px 0 rgba(0, 0, 0, 0.9),
+            -0.5px 0.5px 0 rgba(0, 0, 0, 0.9),
+            0.5px 0.5px 0 rgba(0, 0, 0, 0.9),
+            0 0 4px rgba(0, 0, 0, 0.8);
+        -webkit-text-stroke: 0.3px rgba(0, 0, 0, 0.7);
+    }
+
+    .danmaku-controls {
+        bottom: 12px;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        padding: 8px 12px;
+        border-radius: 14px;
+        max-width: calc(100vw - 24px);
+    }
+
+    .danmaku-controls-inner {
+        gap: 8px;
+    }
+
+    .danmaku-ctrl-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+        border-radius: 8px;
+    }
+
+    .danmaku-slider-group {
+        padding: 3px 8px;
+        border-radius: 8px;
+        gap: 4px;
+    }
+
+    .danmaku-slider {
+        width: 70px;
+    }
+
+    .danmaku-slider-value {
+        font-size: 0.7rem;
+        min-width: 32px;
+    }
+
+    .danmaku-slider-label {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .danmaku-slider {
+        width: 55px;
+    }
+
+    .danmaku-slider-value {
+        display: none;
+    }
+
+    .danmaku-item {
+        font-size: 12px !important;
+    }
+}
+
+/* ===== Touch-friendly adjustments ===== */
+@media (hover: none) and (pointer: coarse) {
+    .danmaku-ctrl-btn:active {
+        transform: scale(0.95);
+    }
+
+    .danmaku-slider::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+    }
+}

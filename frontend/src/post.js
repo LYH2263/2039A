@@ -1,5 +1,6 @@
 import { fetchApi, formatDate } from './config.js';
 import { renderHeader } from './header.js';
+import { DanmakuEngine } from './danmaku.js';
 
 renderHeader();
 
@@ -9,6 +10,13 @@ const postId = urlParams.get('id');
 
 let currentAnnotations = [];
 let activeAnnotationIds = [];
+
+let danmakuEngine = null;
+let danmakuPollTimer = null;
+let danmakuMaxId = 0;
+let isDanmakuMode = false;
+let currentPostData = null;
+let allComments = [];
 
 if (!postId) {
     app.innerHTML = '<div class="alert alert-danger">无效的帖子ID</div>';
@@ -23,6 +31,9 @@ async function loadPost(id) {
             fetchApi(`/annotations.php?post_id=${id}`)
         ]);
         currentAnnotations = annotationData.annotations || [];
+        currentPostData = postData;
+        allComments = postData.comments || [];
+        danmakuMaxId = allComments.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0);
         renderPost(postData);
     } catch (error) {
         app.innerHTML = `<div class="alert alert-danger">加载失败: ${error.message}</div>`;
@@ -132,16 +143,30 @@ function renderPost({ post, comments }) {
 
                 <div class="card mb-4">
                     <div class="card-body">
-                        <h1 class="card-title mb-3">${escapeHtml(post.title)}</h1>
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <h1 class="card-title mb-0">${escapeHtml(post.title)}</h1>
+                            <div class="d-flex gap-2 align-items-center">
+                                <label class="danmaku-switch form-check form-switch mb-0" title="开启弹幕模式">
+                                    <input class="form-check-input" type="checkbox" id="danmaku-toggle" role="switch">
+                                    <span class="form-check-label danmaku-switch-label" for="danmaku-toggle">
+                                        <i class="bi bi-chat-dots"></i> 弹幕
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
                         <h6 class="card-subtitle mb-4 text-muted">
                             作者: ${escapeHtml(post.author_name)} |
                             发布于: ${formatDate(post.created_at)}
                         </h6>
-                        <div class="card-text ann-content" style="white-space: pre-wrap;">${contentHtml}</div>
+                        <div class="card-text ann-content" id="post-content-wrapper" style="white-space: pre-wrap; position: relative;">${contentHtml}</div>
                     </div>
                 </div>
 
-                <h4 class="mb-3">评论区 (${comments.length})</h4>
+                <div id="comments-section">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">评论区 (${comments.length})</h4>
+                    </div>
+                    <div id="comments-list">
     `;
 
     if (comments.length === 0) {
@@ -163,30 +188,56 @@ function renderPost({ post, comments }) {
     }
 
     html += `
-        <div class="card mt-4">
-            <div class="card-header">发表评论</div>
-            <div class="card-body">
-                <div id="alert-box"></div>
-                <form id="comment-form">
-                    <div class="mb-3">
-                        <label for="nickname" class="form-label">昵称 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="nickname" required>
                     </div>
-                    <div class="mb-3">
-                        <label for="content" class="form-label">评论内容 <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="content" rows="3" required></textarea>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">发表评论</div>
+                    <div class="card-body">
+                        <div id="alert-box"></div>
+                        <form id="comment-form">
+                            <div class="mb-3">
+                                <label for="nickname" class="form-label">昵称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="nickname" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="content" class="form-label">评论内容 <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="content" rows="3" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">提交评论</button>
+                        </form>
                     </div>
-                    <button type="submit" class="btn btn-primary">提交评论</button>
-                </form>
+                </div>
             </div>
         </div>
-    </div></div>
+
+        <div id="danmaku-controls" class="danmaku-controls" style="display: none;">
+            <div class="danmaku-controls-inner">
+                <button type="button" class="btn btn-sm btn-outline-secondary danmaku-ctrl-btn" id="danmaku-pause-btn" title="暂停/继续">
+                    <i class="bi bi-pause-fill"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger danmaku-ctrl-btn" id="danmaku-close-btn" title="关闭弹幕">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                <div class="danmaku-slider-group">
+                    <label class="danmaku-slider-label"><i class="bi bi-speedometer2"></i></label>
+                    <input type="range" id="danmaku-speed" min="0.2" max="3" step="0.1" value="1" class="danmaku-slider" title="速度">
+                    <span class="danmaku-slider-value" id="danmaku-speed-val">1.0x</span>
+                </div>
+                <div class="danmaku-slider-group">
+                    <label class="danmaku-slider-label"><i class="bi bi-cloud-sun"></i></label>
+                    <input type="range" id="danmaku-opacity" min="0.1" max="1" step="0.05" value="0.9" class="danmaku-slider" title="透明度">
+                    <span class="danmaku-slider-value" id="danmaku-opacity-val">90%</span>
+                </div>
+            </div>
+        </div>
     `;
 
     app.innerHTML = html;
 
     initAnnotationUI(post);
     document.getElementById('comment-form').addEventListener('submit', handleCommentSubmit);
+    initDanmakuUI();
 }
 
 function initAnnotationUI(post) {
@@ -501,7 +552,7 @@ async function handleCommentSubmit(e) {
     const alertBox = document.getElementById('alert-box');
 
     try {
-        await fetchApi('/comments.php', {
+        const result = await fetchApi('/comments.php', {
             method: 'POST',
             body: JSON.stringify({
                 post_id: postId,
@@ -509,8 +560,213 @@ async function handleCommentSubmit(e) {
                 content
             })
         });
-        window.location.reload();
+
+        document.getElementById('content').value = '';
+        alertBox.innerHTML = `<div class="alert alert-success">评论发布成功！</div>`;
+        setTimeout(() => {
+            const alertEl = alertBox.querySelector('.alert');
+            if (alertEl) alertEl.remove();
+        }, 2000);
+
+        if (result.comment) {
+            const newComment = result.comment;
+            allComments.push(newComment);
+            if (Number(newComment.id) > danmakuMaxId) {
+                danmakuMaxId = Number(newComment.id);
+            }
+            appendCommentToList(newComment);
+            updateCommentCount();
+            if (isDanmakuMode && danmakuEngine) {
+                danmakuEngine.addComment(newComment, true);
+            }
+        }
     } catch (error) {
         alertBox.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+    }
+}
+
+function initDanmakuUI() {
+    const toggle = document.getElementById('danmaku-toggle');
+    if (!toggle) return;
+
+    toggle.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            enableDanmakuMode();
+        } else {
+            disableDanmakuMode();
+        }
+    });
+
+    const pauseBtn = document.getElementById('danmaku-pause-btn');
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', toggleDanmakuPause);
+    }
+
+    const closeBtn = document.getElementById('danmaku-close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            const toggleEl = document.getElementById('danmaku-toggle');
+            if (toggleEl) toggleEl.checked = false;
+            disableDanmakuMode();
+        });
+    }
+
+    const speedSlider = document.getElementById('danmaku-speed');
+    if (speedSlider) {
+        speedSlider.addEventListener('input', (e) => {
+            const val = Number(e.target.value);
+            document.getElementById('danmaku-speed-val').textContent = val.toFixed(1) + 'x';
+            if (danmakuEngine) danmakuEngine.setSpeedScale(val);
+        });
+    }
+
+    const opacitySlider = document.getElementById('danmaku-opacity');
+    if (opacitySlider) {
+        opacitySlider.addEventListener('input', (e) => {
+            const val = Number(e.target.value);
+            document.getElementById('danmaku-opacity-val').textContent = Math.round(val * 100) + '%';
+            if (danmakuEngine) danmakuEngine.setOpacity(val);
+        });
+    }
+}
+
+function enableDanmakuMode() {
+    const contentWrapper = document.getElementById('post-content-wrapper');
+    if (!contentWrapper) return;
+
+    isDanmakuMode = true;
+    contentWrapper.classList.add('danmaku-active');
+
+    const controls = document.getElementById('danmaku-controls');
+    if (controls) controls.style.display = 'block';
+
+    danmakuEngine = new DanmakuEngine(contentWrapper, {
+        opacity: Number(document.getElementById('danmaku-opacity')?.value || 0.9),
+        speedScale: Number(document.getElementById('danmaku-speed')?.value || 1)
+    });
+
+    const shuffled = [...allComments].sort(() => Math.random() - 0.5);
+    const delayStep = Math.max(80, 2000 / Math.max(1, shuffled.length));
+    shuffled.forEach((comment, idx) => {
+        setTimeout(() => {
+            if (danmakuEngine && isDanmakuMode) {
+                danmakuEngine.addComment(comment);
+            }
+        }, idx * delayStep);
+    });
+
+    startDanmakuPolling();
+
+    window.addEventListener('resize', handleDanmakuResize);
+}
+
+function disableDanmakuMode() {
+    isDanmakuMode = false;
+
+    stopDanmakuPolling();
+
+    if (danmakuEngine) {
+        danmakuEngine.destroy();
+        danmakuEngine = null;
+    }
+
+    const contentWrapper = document.getElementById('post-content-wrapper');
+    if (contentWrapper) contentWrapper.classList.remove('danmaku-active');
+
+    const controls = document.getElementById('danmaku-controls');
+    if (controls) controls.style.display = 'none';
+
+    window.removeEventListener('resize', handleDanmakuResize);
+}
+
+function toggleDanmakuPause() {
+    if (!danmakuEngine) return;
+    const isPlaying = danmakuEngine.togglePause();
+    const btn = document.getElementById('danmaku-pause-btn');
+    if (btn) {
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = isPlaying ? 'bi bi-pause-fill' : 'bi bi-play-fill';
+        }
+        btn.classList.toggle('btn-outline-secondary', isPlaying);
+        btn.classList.toggle('btn-outline-success', !isPlaying);
+        btn.title = isPlaying ? '暂停' : '继续';
+    }
+}
+
+let resizeTimeout = null;
+function handleDanmakuResize() {
+    if (resizeTimeout) clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        if (danmakuEngine) danmakuEngine.resize();
+    }, 150);
+}
+
+function startDanmakuPolling() {
+    stopDanmakuPolling();
+    pollNewComments();
+    danmakuPollTimer = setInterval(pollNewComments, 3000);
+}
+
+function stopDanmakuPolling() {
+    if (danmakuPollTimer) {
+        clearInterval(danmakuPollTimer);
+        danmakuPollTimer = null;
+    }
+}
+
+async function pollNewComments() {
+    if (!isDanmakuMode) return;
+    try {
+        const data = await fetchApi(`/comments.php?post_id=${postId}&since_id=${danmakuMaxId}`);
+        if (data.comments && data.comments.length > 0) {
+            const existingIds = new Set(allComments.map(c => String(c.id)));
+            data.comments.forEach(comment => {
+                const cid = String(comment.id);
+                if (!existingIds.has(cid)) {
+                    allComments.push(comment);
+                    appendCommentToList(comment);
+                    existingIds.add(cid);
+                }
+                if (danmakuEngine) {
+                    danmakuEngine.addComment(comment, true);
+                }
+            });
+            if (Number(data.max_id) > danmakuMaxId) {
+                danmakuMaxId = Number(data.max_id);
+            }
+            updateCommentCount();
+        }
+    } catch (err) {
+    }
+}
+
+function appendCommentToList(comment) {
+    const list = document.getElementById('comments-list');
+    if (!list) return;
+
+    const emptyTip = list.querySelector('.text-muted.mb-4');
+    if (emptyTip && emptyTip.textContent.includes('暂无评论')) {
+        emptyTip.remove();
+    }
+
+    const card = document.createElement('div');
+    card.className = 'card mb-3 bg-light fade-in';
+    card.innerHTML = `
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between">
+                <strong>${escapeHtml(comment.author_name)}</strong>
+                <small class="text-muted">${formatDate(comment.created_at)}</small>
+            </div>
+            <p class="mb-0 mt-1">${escapeHtml(comment.content)}</p>
+        </div>
+    `;
+    list.appendChild(card);
+}
+
+function updateCommentCount() {
+    const header = document.querySelector('#comments-section h4');
+    if (header) {
+        header.textContent = `评论区 (${allComments.length})`;
     }
 }
