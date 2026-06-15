@@ -30,6 +30,22 @@ if (!postId) {
     loadPost(postId);
 }
 
+function renderTags(tags) {
+    if (!tags || tags.length === 0) return '';
+    
+    return `
+        <div class="mb-3">
+            ${tags.map(tag => `
+                <a href="/?tag=${encodeURIComponent(tag.name)}" 
+                   class="badge bg-light text-decoration-none text-primary border me-2 mb-1 tag-badge"
+                   style="font-size: 0.875rem;">
+                    <i class="bi bi-tag me-1"></i>${escapeHtml(tag.display_name)}
+                </a>
+            `).join('')}
+        </div>
+    `;
+}
+
 async function loadPost(id) {
     try {
         const [postData, annotationData, treeData] = await Promise.all([
@@ -312,6 +328,7 @@ function renderPost({ post, comments }) {
                                 </label>
                             </div>
                         </div>
+                        ${renderTags(currentPostData.tags)}
                         <h6 class="card-subtitle mb-4 text-muted">
                             作者: ${escapeHtml(post.author_name)} |
                             发布于: ${formatDate(post.created_at)}

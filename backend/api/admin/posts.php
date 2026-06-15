@@ -8,7 +8,7 @@
  * 核心逻辑：
  * 1. 鉴权：调用 check_admin_auth() 确保管理员登录
  * 2. DELETE: 删除指定 ID 的帖子
- * 3. PUT: 更新指定 ID 的帖子标题和内容
+ * 3. PUT: 更新指定 ID 的帖子标题、内容和标签
  * 
  * 异常处理：
  * - 401 Unauthorized: 未登录（由 check_admin_auth 处理）
@@ -17,22 +17,36 @@
  */
 
 require_once '../../db.php';
+require_once '../tag_functions.php';
 check_admin_auth();
 
 $conn = get_db_connection();
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-    // 异常处理：参数校验
     if (!isset($_GET['id'])) jsonResponse(['error' => 'Missing ID'], 400);
     $id = (int)$_GET['id'];
     
-    // 核心逻辑：删除帖子
-    $stmt = $conn->prepare("DELETE FROM posts WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    if ($stmt->execute()) {
+    $conn->begin_transaction();
+    try {
+        $old_tag_ids = [];
+        $result = $conn->query("SELECT tag_id FROM post_tags WHERE post_id = $id");
+        while ($row = $result->fetch_assoc()) {
+            $old_tag_ids[] = $row['tag_id'];
+        }
+        
+        $stmt = $conn->prepare("DELETE FROM posts WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        
+        foreach ($old_tag_ids as $tag_id) {
+            updateTagPostCount($conn, $tag_id);
+        }
+        
+        $conn->commit();
         jsonResponse(['message' => 'Post deleted']);
-    } else {
-        jsonResponse(['error' => 'Failed to delete'], 500);
+    } catch (Exception $e) {
+        $conn->rollback();
+        jsonResponse(['error' => 'Failed to delete: ' . $e->getMessage()], 500);
     }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -41,19 +55,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $id = (int)$input['id'];
     $title = trim($input['title'] ?? '');
     $content = trim($input['content'] ?? '');
+    $tags = isset($input['tags']) && is_array($input['tags']) ? $input['tags'] : null;
     
-    // 异常处理：字段校验
     if (empty($title) || empty($content)) {
         jsonResponse(['error' => 'Title and Content required'], 400);
     }
     
-    // 核心逻辑：更新帖子
-    $stmt = $conn->prepare("UPDATE posts SET title = ?, content = ? WHERE id = ?");
-    $stmt->bind_param("ssi", $title, $content, $id);
-    if ($stmt->execute()) {
+    $conn->begin_transaction();
+    try {
+        $stmt = $conn->prepare("UPDATE posts SET title = ?, content = ? WHERE id = ?");
+        $stmt->bind_param("ssi", $title, $content, $id);
+        $stmt->execute();
+        
+        if ($tags !== null) {
+            syncPostTags($conn, $id, $tags);
+        }
+        
+        $conn->commit();
         jsonResponse(['message' => 'Post updated']);
-    } else {
-        jsonResponse(['error' => 'Failed to update'], 500);
+    } catch (Exception $e) {
+        $conn->rollback();
+        jsonResponse(['error' => 'Failed to update: ' . $e->getMessage()], 500);
     }
 }
 ?>

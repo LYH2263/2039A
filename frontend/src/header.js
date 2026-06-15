@@ -10,6 +10,7 @@ export function renderHeader(activeLink = '') {
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link ${activeLink === 'home' ? 'active' : ''}" href="/">首页</a></li>
+                    <li class="nav-item"><a class="nav-link ${activeLink === 'tags' ? 'active' : ''}" href="/tags.html">标签云</a></li>
                     <li class="nav-item"><a class="nav-link ${activeLink === 'create' ? 'active' : ''}" href="/create_post.html">发布新帖</a></li>
                     <li class="nav-item"><a class="nav-link" href="/admin/index.html">后台管理</a></li>
                 </ul>

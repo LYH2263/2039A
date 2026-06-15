@@ -1255,3 +1255,84 @@ mark.ann-mark-annotated:hover {
         display: none;
     }
 }
+
+/* ===== Tag System Styles ===== */
+.tag-input-wrapper {
+    z-index: 10;
+}
+
+.selected-tags {
+    min-height: 24px;
+}
+
+.tag-suggestions {
+    z-index: 1000;
+    top: 100%;
+    left: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.tag-suggestion-item:hover {
+    background-color: #f3f4f6;
+}
+
+.tag-badge {
+    transition: all 0.2s ease;
+}
+
+.tag-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tag-chip {
+    transition: all 0.2s ease;
+}
+
+.tag-chip:hover {
+    transform: translateY(-1px);
+}
+
+/* Tag Cloud */
+.tag-cloud-container {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    min-height: 300px;
+}
+
+.tag-cloud-item {
+    transition: all 0.3s ease;
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.tag-cloud-item:hover {
+    transform: scale(1.1);
+    text-decoration: underline !important;
+    background-color: rgba(79, 70, 229, 0.1);
+}
+
+.hover-bg:hover {
+    background-color: #f3f4f6;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* Tag Badge in post list */
+.list-group-item .badge {
+    transition: all 0.2s ease;
+}
+
+.list-group-item .badge:hover {
+    transform: translateY(-1px);
+}
+
+/* Responsive adjustments for tags */
+@media (max-width: 768px) {
+    .tag-cloud-item {
+        font-size: 0.875rem !important;
+    }
+}

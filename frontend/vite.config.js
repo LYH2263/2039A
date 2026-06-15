@@ -8,6 +8,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         post: resolve(__dirname, 'post.html'),
         create_post: resolve(__dirname, 'create_post.html'),
+        tags: resolve(__dirname, 'tags.html'),
         login: resolve(__dirname, 'admin/login.html'),
         admin: resolve(__dirname, 'admin/index.html'),
         admin_posts: resolve(__dirname, 'admin/posts.html'),

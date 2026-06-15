@@ -40,10 +40,45 @@ CREATE TABLE IF NOT EXISTS `annotations` (
     FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Tags table
+CREATE TABLE IF NOT EXISTS `tags` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(50) NOT NULL UNIQUE COMMENT '标签名称(唯一，大小写归一化后)',
+    `display_name` VARCHAR(50) NOT NULL COMMENT '标签显示名称(保留原始大小写)',
+    `post_count` INT NOT NULL DEFAULT 0 COMMENT '使用该标签的帖子数量',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX `idx_name` (`name`),
+    INDEX `idx_post_count` (`post_count`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Post_Tags association table (many-to-many)
+CREATE TABLE IF NOT EXISTS `post_tags` (
+    `post_id` INT NOT NULL COMMENT '帖子ID',
+    `tag_id` INT NOT NULL COMMENT '标签ID',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '关联时间',
+    PRIMARY KEY (`post_id`, `tag_id`),
+    FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`tag_id`) REFERENCES `tags`(`id`) ON DELETE CASCADE,
+    INDEX `idx_tag_id` (`tag_id`),
+    INDEX `idx_post_id` (`post_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Optional: Insert some sample data
 INSERT INTO `posts` (`title`, `content`, `author_name`, `created_at`) VALUES
 ('欢迎来到极简论坛', '这是一个基于 PHP + MySQL 的轻量级论坛系统。', '管理员', NOW()),
 ('测试帖子', '这是一条测试内容，用于验证系统功能。', '测试员', NOW());
+
+-- Insert sample tags
+INSERT INTO `tags` (`name`, `display_name`, `post_count`) VALUES
+('php', 'PHP', 1),
+('mysql', 'MySQL', 1),
+('技术', '技术', 1),
+('测试', '测试', 1);
+
+-- Associate tags with posts
+INSERT INTO `post_tags` (`post_id`, `tag_id`) VALUES
+(1, 1), (1, 2), (1, 3),
+(2, 4);
 
 INSERT INTO `comments` (`post_id`, `parent_id`, `author_name`, `content`, `created_at`) VALUES
 (1, NULL, '访客A', '界面很简洁，不错！', NOW()),

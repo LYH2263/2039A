@@ -38,6 +38,7 @@ function renderPosts(posts) {
                                 <th class="ps-4">ID</th>
                                 <th>标题</th>
                                 <th>作者</th>
+                                <th>标签</th>
                                 <th>发布时间</th>
                                 <th>评论数</th>
                                 <th class="text-end pe-4">操作</th>
@@ -47,9 +48,13 @@ function renderPosts(posts) {
     `;
     
     if (posts.length === 0) {
-        html += `<tr><td colspan="6" class="text-center py-4 text-muted">暂无帖子</td></tr>`;
+        html += `<tr><td colspan="7" class="text-center py-4 text-muted">暂无帖子</td></tr>`;
     } else {
         posts.forEach(post => {
+            const tagsHtml = post.tags && post.tags.length > 0 ? 
+                post.tags.map(t => `<span class="badge bg-light text-dark border me-1">${escapeHtml(t.display_name)}</span>`).join('') :
+                '<span class="text-muted small">无标签</span>';
+            
             html += `
                 <tr>
                     <td class="ps-4 fw-bold text-muted">#${post.id}</td>
@@ -62,6 +67,7 @@ function renderPosts(posts) {
                             <span>${escapeHtml(post.author_name)}</span>
                         </div>
                     </td>
+                    <td class="small">${tagsHtml}</td>
                     <td class="text-muted small">${formatDate(post.created_at)}</td>
                     <td><span class="badge bg-light text-dark border">${post.comment_count}</span></td>
                     <td class="text-end pe-4">

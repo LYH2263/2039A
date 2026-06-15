@@ -16,6 +16,7 @@
  */
 
 require_once '../db.php';
+require_once 'tag_functions.php';
 
 $conn = get_db_connection();
 
@@ -52,9 +53,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $comments[] = $row;
     }
 
+    $tags = getTagsForPost($conn, $post_id);
+
     jsonResponse([
         'post' => $post,
-        'comments' => $comments
+        'comments' => $comments,
+        'tags' => $tags
     ]);
 }
 ?>
