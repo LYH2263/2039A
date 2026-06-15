@@ -23,6 +23,19 @@ CREATE TABLE IF NOT EXISTS `comments` (
     FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `annotations` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `post_id` INT NOT NULL COMMENT '所属帖子ID',
+    `start_offset` INT NOT NULL COMMENT '选区起始字符偏移(相对原始正文)',
+    `end_offset` INT NOT NULL COMMENT '选区结束字符偏移(相对原始正文)',
+    `selected_text` TEXT NOT NULL COMMENT '被选中的原文片段(用于校验与容错)',
+    `annotation_text` TEXT DEFAULT NULL COMMENT '批注内容,为空则仅高亮',
+    `author_name` VARCHAR(100) NOT NULL COMMENT '批注者昵称',
+    `type` ENUM('highlight', 'annotation') NOT NULL DEFAULT 'highlight' COMMENT '类型:纯高亮或带批注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Optional: Insert some sample data
 INSERT INTO `posts` (`title`, `content`, `author_name`, `created_at`) VALUES
 ('欢迎来到极简论坛', '这是一个基于 PHP + MySQL 的轻量级论坛系统。', '管理员', NOW()),

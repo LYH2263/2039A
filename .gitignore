@@ -1,10 +1,51 @@
-# 迭代记录与生成文档
+# ===== 迭代记录与生成文档 =====
 迭代.md
 代码生成.md
 题目.md
 对话.md
-
 迭代/
 代码生成/
 题目/
 对话/
+
+# ===== 前端 (Node / Vite) =====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+dist/
+*.local
+
+# ===== 依赖锁与缓存 (按需保留) =====
+.npm/
+.eslintcache
+
+# ===== 日志 =====
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== PHP / Composer =====
+backend/vendor/
+vendor/
+composer.phar
+
+# ===== 环境与密钥 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== Docker =====
+*.pid
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
