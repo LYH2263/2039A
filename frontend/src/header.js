@@ -1,6 +1,12 @@
 import { notificationManager } from './notifications.js';
 
+function escapeHtmlAttr(text) {
+    if (!text) return '';
+    return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export function renderHeader(activeLink = '') {
+    const currentQuery = new URLSearchParams(window.location.search).get('q') || '';
     const nav = document.createElement('nav');
     nav.className = 'navbar navbar-expand-lg navbar-light bg-white mb-4 shadow-sm';
     nav.innerHTML = `
@@ -10,6 +16,12 @@ export function renderHeader(activeLink = '') {
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                <form class="d-flex mx-lg-4 my-2 my-lg-0 search-form" action="/" method="GET" role="search">
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control search-input" name="q" value="${escapeHtmlAttr(currentQuery)}" placeholder="搜索帖子..." aria-label="搜索" maxlength="100">
+                        <button class="btn btn-outline-primary search-btn" type="submit"><i class="bi bi-search"></i></button>
+                    </div>
+                </form>
                 <ul class="navbar-nav ms-auto align-items-lg-center">
                     <li class="nav-item"><a class="nav-link ${activeLink === 'home' ? 'active' : ''}" href="/">首页</a></li>
                     <li class="nav-item"><a class="nav-link ${activeLink === 'tags' ? 'active' : ''}" href="/tags.html">标签云</a></li>

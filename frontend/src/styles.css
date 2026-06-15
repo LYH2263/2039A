@@ -2315,3 +2315,49 @@ mark.ann-mark-annotated:hover {
     color: #6b7280;
     margin: 12px 0;
 }
+
+/* ===== Search ===== */
+.search-form {
+    max-width: 360px;
+    flex: 1;
+}
+
+.search-input {
+    border-radius: 20px 0 0 20px;
+    border-right: none;
+    padding-left: 16px;
+}
+
+.search-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.search-input:focus + .search-btn {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.search-btn {
+    border-radius: 0 20px 20px 0;
+    border-left: none;
+    transition: all 0.2s ease;
+}
+
+mark.search-highlight {
+    background: linear-gradient(120deg, #fef08a 0%, #fde68a 100%);
+    color: inherit;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.list-group-item mark.search-highlight {
+    border-bottom: 2px solid #f59e0b;
+}
+
+@media (max-width: 991px) {
+    .search-form {
+        max-width: 100%;
+    }
+}
