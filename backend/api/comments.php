@@ -161,6 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt2->bind_param("i", $new_id);
         $stmt2->execute();
         $new_comment = $stmt2->get_result()->fetch_assoc();
+
+        createNotificationForComment($conn, $post_id, $new_comment, $nickname);
+
         jsonResponse(['message' => 'Comment created', 'comment' => $new_comment], 201);
     } else {
         jsonResponse(['error' => 'Failed to create comment'], 500);
@@ -216,5 +219,34 @@ function getNodeDepth($node, $currentDepth) {
         }
     }
     return $maxChildDepth;
+}
+
+function createNotificationForComment($conn, $post_id, $comment, $comment_author) {
+    $postStmt = $conn->prepare("SELECT id, title, author_name FROM posts WHERE id = ?");
+    $postStmt->bind_param("i", $post_id);
+    $postStmt->execute();
+    $postResult = $postStmt->get_result();
+    
+    if ($postResult->num_rows === 0) {
+        return;
+    }
+    
+    $post = $postResult->fetch_assoc();
+    $post_author = $post['author_name'];
+    $post_title = $post['title'];
+    
+    if ($comment_author === $post_author) {
+        return;
+    }
+    
+    $content_summary = mb_substr($comment['content'], 0, 80);
+    if (mb_strlen($comment['content']) > 80) {
+        $content_summary .= '...';
+    }
+    
+    $comment_id = (int)$comment['id'];
+    $notifStmt = $conn->prepare("INSERT INTO notifications (recipient_name, type, post_id, post_title, comment_id, comment_author, comment_content) VALUES (?, 'comment', ?, ?, ?, ?, ?)");
+    $notifStmt->bind_param("sissss", $post_author, $post_id, $post_title, $comment_id, $comment_author, $content_summary);
+    $notifStmt->execute();
 }
 ?>

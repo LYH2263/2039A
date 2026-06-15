@@ -1,6 +1,7 @@
 import { fetchApi, escapeHtml } from './config.js';
 import { renderHeader } from './header.js';
 import { renderMarkdownSafe } from './markdown.js';
+import { notificationManager } from './notifications.js';
 
 renderHeader('create');
 
@@ -266,6 +267,11 @@ document.getElementById('post-form').addEventListener('submit', async (e) => {
                 tags: selectedTags
             })
         });
+
+        if (author && notificationManager.nickname !== author) {
+            notificationManager.setNickname(author);
+        }
+
         window.location.href = `/post.html?id=${data.id}`;
     } catch (error) {
         alertBox.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
@@ -379,3 +385,10 @@ function initMdEditor() {
 loadAvailableTags();
 renderSelectedTags();
 initMdEditor();
+
+if (notificationManager.nickname) {
+    const authorInput = document.getElementById('author');
+    if (authorInput && !authorInput.value) {
+        authorInput.value = notificationManager.nickname;
+    }
+}

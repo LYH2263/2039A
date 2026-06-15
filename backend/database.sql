@@ -80,6 +80,24 @@ INSERT INTO `post_tags` (`post_id`, `tag_id`) VALUES
 (1, 1), (1, 2), (1, 3),
 (2, 4);
 
+CREATE TABLE IF NOT EXISTS `notifications` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `recipient_name` VARCHAR(100) NOT NULL COMMENT '接收通知的作者昵称',
+    `type` ENUM('comment') NOT NULL DEFAULT 'comment' COMMENT '通知类型',
+    `post_id` INT NOT NULL COMMENT '关联帖子ID',
+    `post_title` VARCHAR(255) DEFAULT NULL COMMENT '帖子标题快照（帖子删除后仍可展示）',
+    `comment_id` INT DEFAULT NULL COMMENT '关联评论ID',
+    `comment_author` VARCHAR(100) DEFAULT NULL COMMENT '评论者昵称',
+    `comment_content` TEXT DEFAULT NULL COMMENT '评论内容摘要',
+    `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读：0未读，1已读',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `read_at` DATETIME DEFAULT NULL COMMENT '已读时间',
+    INDEX `idx_recipient_name` (`recipient_name`),
+    INDEX `idx_recipient_read` (`recipient_name`, `is_read`),
+    INDEX `idx_post_id` (`post_id`),
+    INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO `comments` (`post_id`, `parent_id`, `author_name`, `content`, `created_at`) VALUES
 (1, NULL, '访客A', '界面很简洁，不错！', NOW()),
 (1, NULL, '访客B', '加载速度很快。', NOW()),

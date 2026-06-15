@@ -3,6 +3,7 @@ import { renderHeader } from './header.js';
 import { DanmakuEngine } from './danmaku.js';
 import { CommentMindMap } from './mindmap.js';
 import { renderMarkdownSafe } from './markdown.js';
+import { notificationManager } from './notifications.js';
 
 renderHeader();
 
@@ -388,6 +389,13 @@ function renderPostContentByMode(post) {
 
 function renderPost({ post, comments }) {
     document.title = `${post.title} - 极简论坛`;
+
+    setTimeout(() => {
+        const nicknameInput = document.getElementById('nickname');
+        if (nicknameInput && !nicknameInput.value && notificationManager.nickname) {
+            nicknameInput.value = notificationManager.nickname;
+        }
+    }, 0);
 
     let html = `
         <div class="row justify-content-center">
@@ -921,6 +929,12 @@ async function handleCommentSubmit(e) {
             const alertEl = alertBox.querySelector('.alert');
             if (alertEl) alertEl.remove();
         }, 2000);
+
+        if (nickname && !notificationManager.nickname) {
+            notificationManager.setNickname(nickname);
+        } else if (nickname && notificationManager.nickname !== nickname) {
+            notificationManager.setNickname(nickname);
+        }
 
         replyToCommentId = null;
         
