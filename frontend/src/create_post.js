@@ -1,5 +1,6 @@
 import { fetchApi, escapeHtml } from './config.js';
 import { renderHeader } from './header.js';
+import { renderMarkdownSafe } from './markdown.js';
 
 renderHeader('create');
 
@@ -9,10 +10,21 @@ let availableTags = [];
 
 app.innerHTML = `
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-lg-10 col-md-12">
         <div class="card">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h4 class="mb-0">发布新帖子</h4>
+                <div class="btn-group btn-group-sm" role="tablist" id="md-view-toggle">
+                    <button type="button" class="btn btn-light active" data-view="split" role="tab">
+                        <i class="bi bi-layout-split"></i> 双栏
+                    </button>
+                    <button type="button" class="btn btn-outline-light" data-view="edit" role="tab">
+                        <i class="bi bi-pencil-square"></i> 编辑
+                    </button>
+                    <button type="button" class="btn btn-outline-light" data-view="preview" role="tab">
+                        <i class="bi bi-eye"></i> 预览
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <div id="alert-box"></div>
@@ -41,8 +53,38 @@ app.innerHTML = `
                     </div>
 
                     <div class="mb-3">
-                        <label for="content" class="form-label">内容 <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="content" rows="6" required></textarea>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="content" class="form-label mb-0">内容 <span class="text-danger">*</span> <small class="text-muted ms-2">支持 Markdown 语法</small></label>
+                            <small class="text-muted">
+                                <a href="javascript:void(0)" id="md-help-toggle" class="text-decoration-none">
+                                    <i class="bi bi-question-circle"></i> Markdown 语法帮助
+                                </a>
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-info py-2 px-3 mb-2 d-none" id="md-help-box">
+                            <small><strong>快速语法：</strong></small>
+                            <div class="row mt-1 g-2">
+                                <div class="col-md-4"><small><code># 标题</code> / <code>**粗体**</code> / <code>*斜体*</code></small></div>
+                                <div class="col-md-4"><small><code>- 列表项</code> / <code>1. 有序</code> / <code>[链接](url)</code></small></div>
+                                <div class="col-md-4"><small><code>\`代码\`</code> / <code>\`\`\`代码块\`\`\`</code> / <code>> 引用</code></small></div>
+                            </div>
+                        </div>
+
+                        <div class="md-editor-container" id="md-editor-container">
+                            <div class="md-editor-pane md-editor-edit active" id="md-edit-pane">
+                                <textarea class="form-control md-textarea" id="content" rows="14" required placeholder="支持 Markdown 语法..."></textarea>
+                            </div>
+                            <div class="md-divider d-none" id="md-divider"></div>
+                            <div class="md-editor-pane md-editor-preview d-none" id="md-preview-pane">
+                                <div class="md-preview-header d-none">
+                                    <i class="bi bi-eye"></i> 实时预览
+                                </div>
+                                <div class="md-preview-content markdown-body" id="md-preview-content">
+                                    <p class="text-muted fst-italic">在左侧输入 Markdown，这里会实时预览...</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="d-grid gap-2">
@@ -230,5 +272,110 @@ document.getElementById('post-form').addEventListener('submit', async (e) => {
     }
 });
 
+let currentMdView = 'split';
+let previewUpdateTimer = null;
+
+function updateMdView(view) {
+    currentMdView = view;
+    const editPane = document.getElementById('md-edit-pane');
+    const previewPane = document.getElementById('md-preview-pane');
+    const divider = document.getElementById('md-divider');
+    const previewHeader = previewPane?.querySelector('.md-preview-header');
+
+    document.querySelectorAll('#md-view-toggle button').forEach(btn => {
+        btn.classList.toggle('btn-light', btn.dataset.view === view);
+        btn.classList.toggle('btn-outline-light', btn.dataset.view !== view);
+        btn.classList.toggle('active', btn.dataset.view === view);
+    });
+
+    if (!editPane || !previewPane || !divider) return;
+
+    editPane.classList.remove('active', 'd-none');
+    previewPane.classList.remove('active', 'd-none');
+    divider.classList.add('d-none');
+    if (previewHeader) previewHeader.classList.add('d-none');
+
+    const container = document.getElementById('md-editor-container');
+    if (container) {
+        container.classList.remove('view-split', 'view-edit-only', 'view-preview-only');
+    }
+
+    switch (view) {
+        case 'edit':
+            previewPane.classList.add('d-none');
+            editPane.classList.add('active');
+            if (container) container.classList.add('view-edit-only');
+            break;
+        case 'preview':
+            editPane.classList.add('d-none');
+            previewPane.classList.add('active');
+            if (previewHeader) previewHeader.classList.remove('d-none');
+            if (container) container.classList.add('view-preview-only');
+            updatePreview();
+            break;
+        case 'split':
+        default:
+            divider.classList.remove('d-none');
+            editPane.classList.add('active');
+            previewPane.classList.add('active');
+            if (previewHeader) previewHeader.classList.remove('d-none');
+            if (container) container.classList.add('view-split');
+            updatePreview();
+            break;
+    }
+}
+
+function updatePreview() {
+    const textarea = document.getElementById('content');
+    const previewContent = document.getElementById('md-preview-content');
+    if (!textarea || !previewContent) return;
+
+    const markdown = textarea.value;
+    
+    if (!markdown.trim()) {
+        previewContent.innerHTML = '<p class="text-muted fst-italic">在左侧输入 Markdown，这里会实时预览...</p>';
+        return;
+    }
+
+    try {
+        previewContent.innerHTML = renderMarkdownSafe(markdown);
+    } catch (err) {
+        console.warn('Preview render error:', err);
+        previewContent.innerHTML = `<pre style="white-space: pre-wrap;">${escapeHtml(markdown)}</pre>`;
+    }
+}
+
+function debouncedUpdatePreview() {
+    if (previewUpdateTimer) clearTimeout(previewUpdateTimer);
+    previewUpdateTimer = setTimeout(updatePreview, 150);
+}
+
+function initMdEditor() {
+    const textarea = document.getElementById('content');
+    const helpToggle = document.getElementById('md-help-toggle');
+    const helpBox = document.getElementById('md-help-box');
+
+    if (helpToggle && helpBox) {
+        helpToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            helpBox.classList.toggle('d-none');
+        });
+    }
+
+    document.querySelectorAll('#md-view-toggle button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            updateMdView(btn.dataset.view);
+        });
+    });
+
+    if (textarea) {
+        textarea.addEventListener('input', debouncedUpdatePreview);
+        textarea.addEventListener('change', updatePreview);
+    }
+
+    updateMdView(currentMdView);
+}
+
 loadAvailableTags();
 renderSelectedTags();
+initMdEditor();

@@ -2,6 +2,7 @@ import { fetchApi, formatDate, escapeHtml } from './config.js';
 import { renderHeader } from './header.js';
 import { DanmakuEngine } from './danmaku.js';
 import { CommentMindMap } from './mindmap.js';
+import { renderMarkdownSafe } from './markdown.js';
 
 renderHeader();
 
@@ -11,6 +12,7 @@ const postId = urlParams.get('id');
 
 let currentAnnotations = [];
 let activeAnnotationIds = [];
+let contentViewMode = 'markdown';
 
 let danmakuEngine = null;
 let danmakuPollTimer = null;
@@ -344,10 +346,48 @@ function scrollToComment(commentId) {
     }
 }
 
+function buildMarkdownWithAnnotations(markdownText, annotations) {
+    const renderedHtml = renderMarkdownSafe(markdownText);
+    if (!annotations || annotations.length === 0) {
+        return renderedHtml;
+    }
+    return renderedHtml;
+}
+
+function renderContentViewHeader() {
+    const hasAnnotations = currentAnnotations && currentAnnotations.length > 0;
+    return `
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <span class="text-muted small"><i class="bi bi-eye"></i> 内容视图：</span>
+            <div class="btn-group btn-group-sm" role="tablist" id="content-view-toggle">
+                <button type="button" class="btn ${contentViewMode === 'markdown' ? 'btn-primary' : 'btn-outline-primary'}" data-view="markdown" role="tab">
+                    <i class="bi bi-file-earmark-markdown"></i> Markdown
+                </button>
+                <button type="button" class="btn ${contentViewMode === 'annotate' ? 'btn-primary' : 'btn-outline-primary'}" data-view="annotate" role="tab">
+                    <i class="bi bi-highlighter"></i> 批注模式
+                    ${hasAnnotations ? `<span class="badge bg-light text-primary ms-1">${currentAnnotations.length}</span>` : ''}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function renderPostContentByMode(post) {
+    if (contentViewMode === 'annotate') {
+        const contentHtml = buildHighlightedHtml(post.content, currentAnnotations);
+        return `
+            <div class="card-text ann-content" id="post-content-wrapper" style="white-space: pre-wrap; position: relative;">${contentHtml}</div>
+        `;
+    } else {
+        const contentHtml = buildMarkdownWithAnnotations(post.content, currentAnnotations);
+        return `
+            <div class="card-text markdown-body" id="post-content-wrapper" style="position: relative;">${contentHtml}</div>
+        `;
+    }
+}
+
 function renderPost({ post, comments }) {
     document.title = `${post.title} - 极简论坛`;
-
-    const contentHtml = buildHighlightedHtml(post.content, currentAnnotations);
 
     let html = `
         <div class="row justify-content-center">
@@ -372,12 +412,13 @@ function renderPost({ post, comments }) {
                                 </label>
                             </div>
                         </div>
+                        ${renderContentViewHeader()}
                         ${renderTags(currentPostData.tags)}
                         <h6 class="card-subtitle mb-4 text-muted">
                             作者: ${escapeHtml(post.author_name)} |
                             发布于: ${formatDate(post.created_at)}
                         </h6>
-                        <div class="card-text ann-content" id="post-content-wrapper" style="white-space: pre-wrap; position: relative;">${contentHtml}</div>
+                        ${renderPostContentByMode(post)}
                     </div>
                 </div>
 
@@ -458,13 +499,22 @@ function renderPost({ post, comments }) {
 
     app.innerHTML = html;
 
-    initAnnotationUI(post);
+    if (contentViewMode === 'annotate') {
+        initAnnotationUI(post);
+    }
     document.getElementById('comment-form').addEventListener('submit', handleCommentSubmit);
     initDanmakuUI();
     
     document.querySelectorAll('.view-toggle-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             switchViewMode(btn.dataset.view);
+        });
+    });
+
+    document.querySelectorAll('#content-view-toggle button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            contentViewMode = btn.dataset.view;
+            renderPost(currentPostData);
         });
     });
     
