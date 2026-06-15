@@ -42,22 +42,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $post = $post_result->fetch_assoc();
 
     // Fetch Comments
-    // 核心逻辑：查询该帖子的评论列表
+    // 核心逻辑：查询该帖子的评论列表并组装为树形结构
     $stmt = $conn->prepare("SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC");
     $stmt->bind_param("i", $post_id);
     $stmt->execute();
     $comments_result = $stmt->get_result();
     
-    $comments = [];
+    $flat_comments = [];
     while($row = $comments_result->fetch_assoc()) {
-        $comments[] = $row;
+        $flat_comments[] = [
+            'id' => (int)$row['id'],
+            'post_id' => (int)$row['post_id'],
+            'parent_id' => $row['parent_id'] ? (int)$row['parent_id'] : null,
+            'author_name' => $row['author_name'],
+            'content' => $row['content'],
+            'created_at' => $row['created_at'],
+            'children' => []
+        ];
+    }
+
+    $comment_map = [];
+    foreach ($flat_comments as &$c) {
+        $comment_map[$c['id']] = &$c;
+    }
+
+    $comments_tree = [];
+    foreach ($flat_comments as &$c) {
+        if ($c['parent_id'] === null) {
+            $comments_tree[] = &$c;
+        } else if (isset($comment_map[$c['parent_id']])) {
+            $comment_map[$c['parent_id']]['children'][] = &$c;
+        } else {
+            $comments_tree[] = &$c;
+        }
     }
 
     $tags = getTagsForPost($conn, $post_id);
 
     jsonResponse([
         'post' => $post,
-        'comments' => $comments,
+        'comments' => $comments_tree,
+        'flat_comments' => $flat_comments,
+        'total_comments' => count($flat_comments),
         'tags' => $tags
     ]);
 }

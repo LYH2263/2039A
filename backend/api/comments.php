@@ -130,11 +130,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($parent_id !== null) {
-        $stmt = $conn->prepare("SELECT id FROM comments WHERE id = ? AND post_id = ?");
-        $stmt->bind_param("ii", $parent_id, $post_id);
+        $stmt = $conn->prepare("SELECT id, post_id, parent_id FROM comments WHERE id = ?");
+        $stmt->bind_param("i", $parent_id);
         $stmt->execute();
-        if ($stmt->get_result()->num_rows === 0) {
-            jsonResponse(['error' => 'Invalid parent_id'], 400);
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            jsonResponse(['error' => 'Invalid parent_id: parent comment not found'], 400);
+        }
+        $parent = $result->fetch_assoc();
+        if ((int)$parent['post_id'] !== $post_id) {
+            jsonResponse(['error' => 'Invalid parent_id: parent comment belongs to a different post'], 400);
+        }
+
+        if (!checkNoCircularReference($conn, $parent_id, $post_id)) {
+            jsonResponse(['error' => 'Invalid parent_id: circular reference detected'], 400);
         }
     }
 
@@ -156,6 +165,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         jsonResponse(['error' => 'Failed to create comment'], 500);
     }
+}
+
+function checkNoCircularReference($conn, $parent_id, $post_id) {
+    $visited = [];
+    $current_id = $parent_id;
+    $max_depth = 50;
+
+    while ($current_id !== null && $max_depth > 0) {
+        if (isset($visited[$current_id])) {
+            return false;
+        }
+        $visited[$current_id] = true;
+
+        $stmt = $conn->prepare("SELECT parent_id FROM comments WHERE id = ? AND post_id = ?");
+        $stmt->bind_param("ii", $current_id, $post_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            break;
+        }
+        $row = $result->fetch_assoc();
+        $current_id = $row['parent_id'] ? (int)$row['parent_id'] : null;
+        $max_depth--;
+    }
+
+    return $max_depth > 0;
 }
 
 function calculateMaxDepth($tree) {

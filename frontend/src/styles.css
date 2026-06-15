@@ -1182,6 +1182,63 @@ mark.ann-mark-annotated:hover {
     margin-right: 6px;
 }
 
+.more-replies-wrapper {
+    margin-left: 40px;
+    margin-bottom: 12px;
+}
+
+.more-replies-btn {
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    border-radius: 16px;
+    transition: all 0.2s ease;
+}
+
+.more-replies-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.2);
+}
+
+.more-replies-btn i {
+    font-size: 0.7rem;
+    margin-right: 4px;
+}
+
+.reply-container.deep-replies .reply-item {
+    background: #fefefe !important;
+    border-left-color: #d1d5db !important;
+}
+
+.reply-container.deep-replies .reply-container {
+    margin-left: 28px;
+}
+
+.reply-container.deep-replies .reply-container::before {
+    left: -14px;
+    width: 14px;
+}
+
+.reply-btn {
+    transition: color 0.2s ease;
+}
+
+.reply-btn:hover {
+    color: var(--primary-color) !important;
+    text-decoration: none !important;
+}
+
+.comment-item .card {
+    transition: all 0.2s ease;
+}
+
+.comment-item .card:hover {
+    transform: translateX(2px);
+}
+
+.reply-item {
+    transition: all 0.2s ease;
+}
+
 /* ===== Empty State ===== */
 .empty-mindmap {
     position: absolute;

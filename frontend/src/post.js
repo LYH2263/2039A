@@ -23,6 +23,7 @@ let currentViewMode = 'list';
 let mindMapInstance = null;
 let replyToCommentId = null;
 let authorMap = new Map();
+let expandedReplies = new Set();
 
 if (!postId) {
     app.innerHTML = '<div class="alert alert-danger">无效的帖子ID</div>';
@@ -55,7 +56,7 @@ async function loadPost(id) {
         ]);
         currentAnnotations = annotationData.annotations || [];
         currentPostData = postData;
-        allComments = postData.comments || [];
+        allComments = postData.flat_comments || postData.comments || [];
         commentTreeData = treeData;
         danmakuMaxId = allComments.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0);
         
@@ -178,11 +179,17 @@ function renderCommentListWithHierarchy(comments) {
         return `<p class="text-muted mb-4">暂无评论，抢沙发！</p>`;
     }
     
-    const tree = buildCommentTree(comments);
+    let tree;
+    if (Array.isArray(comments) && comments.length > 0 && comments[0].children !== undefined) {
+        tree = comments;
+    } else {
+        tree = buildCommentTree(comments);
+    }
     
     const renderNode = (node, depth = 0) => {
         const hasChildren = node.children && node.children.length > 0;
         const isReply = node.parent_id !== null && node.parent_id !== undefined;
+        const isExpanded = expandedReplies.has(Number(node.id));
         
         let html = `
             <div class="comment-item ${hasChildren ? 'with-replies' : ''}" data-comment-id="${node.id}">
@@ -210,17 +217,54 @@ function renderCommentListWithHierarchy(comments) {
         `;
         
         if (hasChildren) {
-            html += `<div class="reply-container">`;
-            node.children.forEach(child => {
-                html += renderNode(child, depth + 1);
-            });
-            html += `</div>`;
+            if (depth === 0) {
+                html += `<div class="reply-container">`;
+                node.children.forEach(child => {
+                    html += renderNode(child, depth + 1);
+                });
+                html += `</div>`;
+            } else if (depth === 1) {
+                if (isExpanded) {
+                    html += `<div class="reply-container deep-replies">`;
+                    node.children.forEach(child => {
+                        html += renderNode(child, depth + 1);
+                    });
+                    html += `</div>`;
+                }
+                
+                const descendantCount = countDescendants(node);
+                if (descendantCount > 0) {
+                    html += `
+                        <div class="more-replies-wrapper">
+                            <button class="btn btn-sm btn-outline-primary more-replies-btn" data-comment-id="${node.id}" data-expanded="${isExpanded}">
+                                <i class="bi ${isExpanded ? 'bi-chevron-up' : 'bi-chevron-down'}"></i>
+                                ${isExpanded ? '收起回复' : `查看 ${descendantCount} 条更多回复`}
+                            </button>
+                        </div>
+                    `;
+                }
+            } else {
+                html += `<div class="reply-container deep-replies">`;
+                node.children.forEach(child => {
+                    html += renderNode(child, depth + 1);
+                });
+                html += `</div>`;
+            }
         }
         
         return html;
     };
     
     return tree.map(node => renderNode(node)).join('');
+}
+
+function countDescendants(node) {
+    if (!node.children || node.children.length === 0) return 0;
+    let count = node.children.length;
+    node.children.forEach(child => {
+        count += countDescendants(child);
+    });
+    return count;
 }
 
 function renderEmptyMindmap() {
@@ -339,7 +383,7 @@ function renderPost({ post, comments }) {
 
                 <div id="comments-section">
                     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                        <h4 class="mb-0">评论区 (${comments.length})</h4>
+                        <h4 class="mb-0">评论区 (${currentPostData.total_comments || allComments.length})</h4>
                         <div class="view-toggle-group" role="tablist">
                             <button class="view-toggle-btn ${currentViewMode === 'list' ? 'active' : ''}" data-view="list" role="tab">
                                 <i class="bi bi-list"></i> <span>列表</span>
@@ -432,6 +476,14 @@ function renderPost({ post, comments }) {
         });
     });
     
+    document.querySelectorAll('.more-replies-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = Number(btn.dataset.commentId);
+            toggleRepliesExpand(commentId);
+        });
+    });
+    
     const cancelReplyBtn = document.getElementById('cancel-reply-btn');
     if (cancelReplyBtn) {
         cancelReplyBtn.addEventListener('click', cancelReply);
@@ -457,13 +509,23 @@ function cancelReply() {
     renderPost(currentPostData);
 }
 
+function toggleRepliesExpand(commentId) {
+    const id = Number(commentId);
+    if (expandedReplies.has(id)) {
+        expandedReplies.delete(id);
+    } else {
+        expandedReplies.add(id);
+    }
+    renderPost(currentPostData);
+}
+
 function refreshComments() {
     return Promise.all([
         fetchApi(`/post.php?id=${postId}`),
         fetchApi(`/comments.php?post_id=${postId}&view=tree`)
     ]).then(([postData, treeData]) => {
         currentPostData = postData;
-        allComments = postData.comments || [];
+        allComments = postData.flat_comments || postData.comments || [];
         commentTreeData = treeData;
         
         authorMap.clear();

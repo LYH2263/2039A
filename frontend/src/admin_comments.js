@@ -137,7 +137,7 @@ function renderComments(comments) {
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            if (confirm('确定要删除这条评论吗？删除后其子评论也会被一并删除。')) {
+            if (confirm('确定要删除这条评论吗？删除后其直接子回复将提升一级。')) {
                 const id = e.target.getAttribute('data-id');
                 try {
                     await fetchApi(`/admin/comments.php?id=${id}`, { method: 'DELETE' });

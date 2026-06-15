@@ -36,13 +36,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if (!isset($_GET['id'])) jsonResponse(['error' => 'Missing ID'], 400);
     $id = (int)$_GET['id'];
     
-    // 核心逻辑：删除评论
-    $stmt = $conn->prepare("DELETE FROM comments WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    if ($stmt->execute()) {
-        jsonResponse(['message' => 'Comment deleted']);
-    } else {
-        jsonResponse(['error' => 'Failed to delete'], 500);
+    // 核心逻辑：删除评论前处理子回复的归属
+    // 策略：将直接子回复提升一级（parent_id 设置为被删除评论的 parent_id）
+    // 避免 ON DELETE CASCADE 导致整栋楼被删
+    
+    $conn->begin_transaction();
+    
+    try {
+        // 获取被删除评论的 parent_id
+        $stmt = $conn->prepare("SELECT parent_id, post_id FROM comments WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $conn->rollback();
+            jsonResponse(['error' => 'Comment not found'], 404);
+        }
+        $comment = $result->fetch_assoc();
+        $new_parent_id = $comment['parent_id'];
+        $post_id = $comment['post_id'];
+        
+        // 将直接子回复的 parent_id 设置为被删除评论的 parent_id（提升一级）
+        $stmt = $conn->prepare("UPDATE comments SET parent_id = ? WHERE parent_id = ?");
+        $null_val = null;
+        if ($new_parent_id === null) {
+            $stmt->bind_param("ii", $null_val, $id);
+        } else {
+            $stmt->bind_param("ii", $new_parent_id, $id);
+        }
+        $stmt->execute();
+        $replies_promoted = $stmt->affected_rows > 0;
+        
+        // 删除评论
+        $stmt = $conn->prepare("DELETE FROM comments WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        
+        $conn->commit();
+        jsonResponse(['message' => 'Comment deleted', 'replies_promoted' => $replies_promoted]);
+    } catch (Exception $e) {
+        $conn->rollback();
+        jsonResponse(['error' => 'Failed to delete: ' . $e->getMessage()], 500);
     }
 }
 ?>
