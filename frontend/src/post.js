@@ -21,6 +21,7 @@ let danmakuMaxId = 0;
 let isDanmakuMode = false;
 let currentPostData = null;
 let allComments = [];
+let initialDanmakuTimers = [];
 let commentTreeData = null;
 let currentViewMode = 'list';
 let mindMapInstance = null;
@@ -1101,17 +1102,26 @@ async function handleCommentSubmit(e) {
         
         if (result.comment) {
             const newComment = result.comment;
-            allComments.push(newComment);
-            authorMap.set(Number(newComment.id), newComment.author_name);
-            
+            const commentId = String(newComment.id);
+            const exists = allComments.some(c => String(c.id) === commentId);
+
+            if (!exists) {
+                allComments.push(newComment);
+                authorMap.set(Number(newComment.id), newComment.author_name);
+                appendCommentToList(newComment);
+                updateCommentCount();
+            }
+
             if (Number(newComment.id) > danmakuMaxId) {
                 danmakuMaxId = Number(newComment.id);
             }
-            
-            refreshComments();
-            
-            if (isDanmakuMode && danmakuEngine) {
-                danmakuEngine.addComment(newComment, true);
+
+            if (isDanmakuMode && danmakuEngine && danmakuEngine.isRunning) {
+                try {
+                    danmakuEngine.addComment(newComment, true);
+                } catch (err) {
+                    console.warn('[Danmaku] add new comment failed:', err);
+                }
             }
         }
     } catch (error) {
@@ -1168,25 +1178,42 @@ function enableDanmakuMode() {
     const contentWrapper = document.getElementById('post-content-wrapper');
     if (!contentWrapper) return;
 
+    if (isDanmakuMode || danmakuEngine) {
+        disableDanmakuMode();
+    }
+
     isDanmakuMode = true;
     contentWrapper.classList.add('danmaku-active');
 
     const controls = document.getElementById('danmaku-controls');
     if (controls) controls.style.display = 'block';
 
+    const toggle = document.getElementById('danmaku-toggle');
+    if (toggle && !toggle.checked) {
+        toggle.checked = true;
+    }
+
     danmakuEngine = new DanmakuEngine(contentWrapper, {
         opacity: Number(document.getElementById('danmaku-opacity')?.value || 0.9),
         speedScale: Number(document.getElementById('danmaku-speed')?.value || 1)
     });
 
+    initialDanmakuTimers.forEach(t => clearTimeout(t));
+    initialDanmakuTimers = [];
+
     const shuffled = [...allComments].sort(() => Math.random() - 0.5);
     const delayStep = Math.max(80, 2000 / Math.max(1, shuffled.length));
     shuffled.forEach((comment, idx) => {
-        setTimeout(() => {
-            if (danmakuEngine && isDanmakuMode) {
-                danmakuEngine.addComment(comment);
+        const timer = setTimeout(() => {
+            if (danmakuEngine && isDanmakuMode && danmakuEngine.isRunning) {
+                try {
+                    danmakuEngine.addComment(comment);
+                } catch (e) {
+                    console.warn('[Danmaku] initial add failed:', e);
+                }
             }
         }, idx * delayStep);
+        initialDanmakuTimers.push(timer);
     });
 
     startDanmakuPolling();
@@ -1195,12 +1222,21 @@ function enableDanmakuMode() {
 }
 
 function disableDanmakuMode() {
+    if (!isDanmakuMode && !danmakuEngine) return;
+
     isDanmakuMode = false;
 
     stopDanmakuPolling();
 
+    initialDanmakuTimers.forEach(t => clearTimeout(t));
+    initialDanmakuTimers = [];
+
     if (danmakuEngine) {
-        danmakuEngine.destroy();
+        try {
+            danmakuEngine.destroy();
+        } catch (e) {
+            console.warn('[Danmaku] destroy error:', e);
+        }
         danmakuEngine = null;
     }
 
@@ -1209,6 +1245,20 @@ function disableDanmakuMode() {
 
     const controls = document.getElementById('danmaku-controls');
     if (controls) controls.style.display = 'none';
+
+    const toggle = document.getElementById('danmaku-toggle');
+    if (toggle && toggle.checked) {
+        toggle.checked = false;
+    }
+
+    const pauseBtn = document.getElementById('danmaku-pause-btn');
+    if (pauseBtn) {
+        const icon = pauseBtn.querySelector('i');
+        if (icon) icon.className = 'bi bi-pause-fill';
+        pauseBtn.classList.remove('btn-outline-success');
+        pauseBtn.classList.add('btn-outline-secondary');
+        pauseBtn.title = '暂停';
+    }
 
     window.removeEventListener('resize', handleDanmakuResize);
 }
@@ -1255,31 +1305,37 @@ async function pollNewComments() {
         const data = await fetchApi(`/comments.php?post_id=${postId}&since_id=${danmakuMaxId}`);
         if (data.comments && data.comments.length > 0) {
             const existingIds = new Set(allComments.map(c => String(c.id)));
-            let hasNewComments = false;
-            
+            const newCommentsToAdd = [];
+
             data.comments.forEach(comment => {
                 const cid = String(comment.id);
                 if (!existingIds.has(cid)) {
                     allComments.push(comment);
                     authorMap.set(Number(comment.id), comment.author_name);
-                    hasNewComments = true;
+                    newCommentsToAdd.push(comment);
                 }
-                if (danmakuEngine) {
-                    danmakuEngine.addComment(comment, true);
+                if (danmakuEngine && danmakuEngine.isRunning) {
+                    try {
+                        danmakuEngine.addComment(comment, true);
+                    } catch (e) {
+                        console.warn('[Danmaku] poll add failed:', e);
+                    }
                 }
             });
-            
+
             if (Number(data.max_id) > danmakuMaxId) {
                 danmakuMaxId = Number(data.max_id);
             }
-            
-            if (hasNewComments && currentViewMode === 'list') {
-                renderPost(currentPostData);
+
+            if (newCommentsToAdd.length > 0) {
+                newCommentsToAdd.forEach(comment => {
+                    appendCommentToList(comment);
+                });
+                updateCommentCount();
             }
-            
-            updateCommentCount();
         }
     } catch (err) {
+        console.warn('[Danmaku] poll error:', err);
     }
 }
 

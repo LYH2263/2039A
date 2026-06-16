@@ -94,48 +94,67 @@ export class DanmakuEngine {
     }
 
     resize() {
-        this._measure();
-        const oldCount = this.trackCount;
-        this._initTracks();
-        if (oldCount !== this.trackCount) {
-            this.activeDanmakus.forEach(d => {
-                if (d.track >= this.trackCount) {
-                    d.track = d.track % this.trackCount;
-                }
-            });
+        if (!this.isRunning || !this.stage) return;
+        try {
+            this._measure();
+            const oldCount = this.trackCount;
+            this._initTracks();
+            if (oldCount !== this.trackCount) {
+                this.activeDanmakus.forEach(d => {
+                    if (d.track >= this.trackCount) {
+                        d.track = d.track % this.trackCount;
+                        if (d.track < 0) d.track = 0;
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('[Danmaku] resize error:', e);
         }
     }
 
     addComment(comment, priority = false) {
+        if (!this.isRunning || !this.stage) return;
         if (!comment || !comment.content) return;
-        const id = String(comment.id ?? comment.tempId ?? Math.random());
-        if (this._seenIds.has(id)) return;
-        this._seenIds.add(id);
 
-        const item = {
-            id,
-            text: comment.content,
-            author: comment.author_name || '匿名',
-            color: COLORS[Math.floor(Math.random() * COLORS.length)],
-            speed: SPEED_BASE + Math.random() * SPEED_VARIANCE,
-            track: -1,
-            x: 0,
-            width: 0,
-            el: null,
-            priority
-        };
-        this._pendingQueue.push(item);
-        this._flushPending();
+        try {
+            const id = String(comment.id ?? comment.tempId ?? Math.random());
+            if (this._seenIds.has(id)) return;
+            this._seenIds.add(id);
+
+            const item = {
+                id,
+                text: comment.content,
+                author: comment.author_name || '匿名',
+                color: COLORS[Math.floor(Math.random() * COLORS.length)],
+                speed: SPEED_BASE + Math.random() * SPEED_VARIANCE,
+                track: -1,
+                x: 0,
+                width: 0,
+                el: null,
+                priority
+            };
+            this._pendingQueue.push(item);
+            this._flushPending();
+        } catch (e) {
+            console.warn('[Danmaku] addComment failed:', e);
+        }
     }
 
     _flushPending() {
-        while (this._pendingQueue.length > 0) {
+        while (this._pendingQueue.length > 0 && this.stage) {
             const item = this._pendingQueue.shift();
-            this._launch(item);
+            try {
+                this._launch(item);
+            } catch (e) {
+                console.warn('[Danmaku] launch failed:', e);
+                this._releaseEl(item.el);
+            }
         }
     }
 
     _launch(item) {
+        if (!this.stage) throw new Error('Stage not available');
+
         const el = this._acquireEl();
         item.el = el;
 
@@ -147,9 +166,12 @@ export class DanmakuEngine {
         el.style.opacity = this.options.opacity;
 
         this.stage.appendChild(el);
-        item.width = el.offsetWidth;
+        item.width = Math.max(el.offsetWidth, 20);
 
         const track = this._allocateTrack(item.width);
+        if (track < 0 || track >= this.trackCount) {
+            throw new Error(`Invalid track: ${track}`);
+        }
         item.track = track;
         item.x = this.stageWidth;
         el.style.transform = this._buildTransform(item.x, track);
@@ -161,6 +183,8 @@ export class DanmakuEngine {
     }
 
     _allocateTrack(danmakuWidth) {
+        if (this.trackCount <= 0) return 0;
+
         let bestIdx = -1;
         let bestRightMost = Infinity;
 
@@ -243,34 +267,55 @@ export class DanmakuEngine {
     }
 
     _tick = () => {
-        const now = performance.now();
-        const dt = Math.min(100, (now - this.lastTime) / 1000);
-        this.lastTime = now;
+        if (!this.isRunning) return;
 
-        if (!this.isPaused) {
-            this._update(dt);
+        try {
+            const now = performance.now();
+            const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+            this.lastTime = now;
+
+            if (!this.isPaused && this.stage) {
+                this._update(dt);
+            }
+        } catch (e) {
+            console.warn('[Danmaku] tick error:', e);
         }
 
-        this.rafId = requestAnimationFrame(this._tick);
+        if (this.isRunning) {
+            this.rafId = requestAnimationFrame(this._tick);
+        }
     };
 
     _update(dt) {
+        if (!this.stage || this.trackCount <= 0) return;
+
         const scale = this.options.speedScale;
         const alive = [];
         const trackMax = new Array(this.trackCount).fill(-Infinity);
 
         for (const d of this.activeDanmakus) {
-            d.x -= d.speed * scale * dt;
-            if (d.el) {
-                d.el.style.transform = this._buildTransform(d.x, d.track);
-            }
-            const rightEdge = d.x + d.width;
-            if (rightEdge > 0) {
-                alive.push(d);
-                if (rightEdge > trackMax[d.track]) {
-                    trackMax[d.track] = rightEdge;
+            try {
+                if (d.track < 0 || d.track >= this.trackCount) {
+                    d.track = d.track % this.trackCount;
+                    if (d.track < 0) d.track = 0;
                 }
-            } else {
+
+                d.x -= d.speed * scale * dt;
+                if (d.el) {
+                    d.el.style.transform = this._buildTransform(d.x, d.track);
+                }
+
+                const rightEdge = d.x + d.width;
+                if (rightEdge > 0) {
+                    alive.push(d);
+                    if (rightEdge > trackMax[d.track]) {
+                        trackMax[d.track] = rightEdge;
+                    }
+                } else {
+                    this._releaseEl(d.el);
+                }
+            } catch (e) {
+                console.warn('[Danmaku] update item error:', e);
                 this._releaseEl(d.el);
             }
         }
@@ -322,6 +367,8 @@ export class DanmakuEngine {
     }
 
     destroy() {
+        if (!this.isRunning && !this.stage) return;
+
         this.isRunning = false;
         this.isPaused = true;
         this._pauseLoop();
@@ -332,17 +379,29 @@ export class DanmakuEngine {
         }
 
         for (const d of this.activeDanmakus) {
-            this._releaseEl(d.el);
+            try {
+                this._releaseEl(d.el);
+            } catch (e) {
+                // ignore
+            }
         }
         this.activeDanmakus = [];
 
         for (const el of this.pool) {
-            if (el.parentNode) el.parentNode.removeChild(el);
+            try {
+                if (el.parentNode) el.parentNode.removeChild(el);
+            } catch (e) {
+                // ignore
+            }
         }
         this.pool = [];
 
         if (this.stage && this.stage.parentNode) {
-            this.stage.parentNode.removeChild(this.stage);
+            try {
+                this.stage.parentNode.removeChild(this.stage);
+            } catch (e) {
+                // ignore
+            }
         }
         this.stage = null;
 
@@ -350,7 +409,11 @@ export class DanmakuEngine {
         this._seenIds.clear();
 
         if (typeof this.options.onDestroy === 'function') {
-            this.options.onDestroy();
+            try {
+                this.options.onDestroy();
+            } catch (e) {
+                // ignore
+            }
         }
     }
 }
