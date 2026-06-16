@@ -35,37 +35,40 @@ $titleWeight = 5;
 $contentWeight = 1;
 
 $scoreParts = [];
-$havingParts = [];
-$paramTypes = '';
-$params = [];
+$whereParts = [];
+$allParamTypes = '';
+$allParams = [];
 
-foreach ($keywords as $i => $kw) {
-    $escapedKw = str_replace(['%', '_'], ['\\%', '\\_'], $kw);
-    $likeKw = '%' . $escapedKw . '%';
-    $scoreParts[] = "(CASE WHEN p.title LIKE ? THEN {$titleWeight} ELSE 0 END) + (CASE WHEN p.content LIKE ? THEN {$contentWeight} ELSE 0 END)";
-    $havingParts[] = "(p.title LIKE ? OR p.content LIKE ?)";
-    $paramTypes .= 'ss';
-    $params[] = $likeKw;
-    $params[] = $likeKw;
-}
-
-$scoreExpr = implode(' + ', $scoreParts);
-
-$countSql = "SELECT COUNT(*) as count FROM posts p";
-$havingExpr = implode(' AND ', $havingParts);
-
-$countWhereTypes = '';
-$countWhereParams = [];
 foreach ($keywords as $kw) {
     $escapedKw = str_replace(['%', '_'], ['\\%', '\\_'], $kw);
     $likeKw = '%' . $escapedKw . '%';
-    $countWhereTypes .= 'ss';
-    $countWhereParams[] = $likeKw;
-    $countWhereParams[] = $likeKw;
+
+    $scoreParts[] = "(CASE WHEN p.title LIKE ? THEN {$titleWeight} ELSE 0 END) + (CASE WHEN p.content LIKE ? THEN {$contentWeight} ELSE 0 END)";
+    $allParamTypes .= 'ss';
+    $allParams[] = $likeKw;
+    $allParams[] = $likeKw;
+
+    $whereParts[] = "(p.title LIKE ? OR p.content LIKE ?)";
+    $allParamTypes .= 'ss';
+    $allParams[] = $likeKw;
+    $allParams[] = $likeKw;
+}
+
+$scoreExpr = implode(' + ', $scoreParts);
+$whereExpr = implode(' AND ', $whereParts);
+
+$countTypes = '';
+$countParams = [];
+foreach ($keywords as $kw) {
+    $escapedKw = str_replace(['%', '_'], ['\\%', '\\_'], $kw);
+    $likeKw = '%' . $escapedKw . '%';
+    $countTypes .= 'ss';
+    $countParams[] = $likeKw;
+    $countParams[] = $likeKw;
 }
 
 $countSql = "SELECT COUNT(*) as count FROM (
-    SELECT p.id FROM posts p WHERE {$havingExpr}
+    SELECT p.id FROM posts p WHERE {$whereExpr}
 ) AS matched";
 
 $countStmt = $conn->prepare($countSql);
@@ -73,7 +76,7 @@ if (!$countStmt) {
     jsonResponse(['error' => 'Database query failed'], 500);
 }
 
-$countStmt->bind_param($countWhereTypes, ...$countWhereParams);
+$countStmt->bind_param($countTypes, ...$countParams);
 $countStmt->execute();
 $total_posts = $countStmt->get_result()->fetch_assoc()['count'];
 $countStmt->close();
@@ -85,19 +88,20 @@ $sql = "SELECT p.*,
         (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count,
         ({$scoreExpr}) AS relevance
         FROM posts p
-        WHERE {$havingExpr}
+        WHERE {$whereExpr}
         ORDER BY relevance DESC, p.created_at DESC
         LIMIT ?, ?";
 
-$allTypes = $paramTypes . 'ii';
-$allParams = array_merge($params, [$offset, $posts_per_page]);
+$allParamTypes .= 'ii';
+$allParams[] = $offset;
+$allParams[] = $posts_per_page;
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
     jsonResponse(['error' => 'Database query failed'], 500);
 }
 
-$stmt->bind_param($allTypes, ...$allParams);
+$stmt->bind_param($allParamTypes, ...$allParams);
 $stmt->execute();
 $result = $stmt->get_result();
 
