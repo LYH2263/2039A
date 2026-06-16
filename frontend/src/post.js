@@ -11,6 +11,7 @@ renderHeader();
 const app = document.getElementById('app');
 const urlParams = new URLSearchParams(window.location.search);
 const postId = urlParams.get('id');
+const targetCommentId = urlParams.get('comment_id') ? Number(urlParams.get('comment_id')) : null;
 
 let currentAnnotations = [];
 let activeAnnotationIds = [];
@@ -80,7 +81,17 @@ async function loadPost(id) {
             authorMap.set(Number(c.id), c.author_name);
         });
         
+        if (targetCommentId) {
+            expandCommentAncestors(targetCommentId);
+        }
+        
         renderPost(postData);
+        
+        if (targetCommentId) {
+            setTimeout(() => {
+                scrollToTargetComment(targetCommentId);
+            }, 100);
+        }
     } catch (error) {
         app.innerHTML = `<div class="alert alert-danger">加载失败: ${error.message}</div>`;
     }
@@ -395,6 +406,71 @@ function initMindMap() {
     });
     
     mindMapInstance.setData(commentTreeData.tree, currentPostData.post);
+}
+
+function expandCommentAncestors(commentId) {
+    const comment = allComments.find(c => Number(c.id) === Number(commentId));
+    if (!comment) return;
+    
+    let currentId = comment.parent_id;
+    while (currentId) {
+        expandedReplies.add(Number(currentId));
+        const parent = allComments.find(c => Number(c.id) === Number(currentId));
+        if (parent) {
+            currentId = parent.parent_id;
+        } else {
+            break;
+        }
+    }
+}
+
+function scrollToTargetComment(commentId) {
+    const comment = allComments.find(c => Number(c.id) === Number(commentId));
+    if (!comment) {
+        showCommentNotFoundTip(commentId);
+        return;
+    }
+    
+    const commentEl = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (!commentEl) {
+        showCommentNotFoundTip(commentId);
+        return;
+    }
+    
+    commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    const card = commentEl.querySelector('.card');
+    if (card) {
+        card.classList.add('comment-highlight-target');
+        setTimeout(() => {
+            card.classList.add('comment-highlight-pulse');
+        }, 100);
+        
+        setTimeout(() => {
+            card.classList.remove('comment-highlight-pulse');
+            card.classList.remove('comment-highlight-target');
+        }, 4000);
+    }
+}
+
+function showCommentNotFoundTip(commentId) {
+    const commentsSection = document.getElementById('comments-section');
+    if (!commentsSection) return;
+    
+    const tip = document.createElement('div');
+    tip.className = 'alert alert-info alert-dismissible fade show mb-3';
+    tip.innerHTML = `
+        <i class="bi bi-info-circle me-2"></i>
+        <span>该评论可能已被删除，无法定位到具体位置。</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    commentsSection.insertBefore(tip, commentsSection.firstChild);
+    
+    setTimeout(() => {
+        if (tip.parentNode) {
+            tip.remove();
+        }
+    }, 5000);
 }
 
 function scrollToComment(commentId) {

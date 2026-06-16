@@ -197,11 +197,13 @@ class NotificationManager {
         const isUnread = !notification.is_read;
         const title = notification.post_title || '（帖子已删除）';
         const commentContent = notification.comment_content || '';
+        const commentId = notification.comment_id || '';
         
         return `
             <div class="notification-item ${isUnread ? 'notification-item-unread' : ''}" 
                  data-id="${notification.id}" 
-                 data-post-id="${notification.post_id}">
+                 data-post-id="${notification.post_id}"
+                 data-comment-id="${commentId}">
                 <div class="notification-item-header">
                     <strong>${escapeHtml(notification.comment_author || '匿名')}</strong>
                     <span class="notification-item-time">${this.formatRelativeTime(notification.created_at)}</span>
@@ -270,7 +272,8 @@ class NotificationManager {
             item.addEventListener('click', () => {
                 const id = Number(item.dataset.id);
                 const postId = item.dataset.postId;
-                this.handleNotificationClick(id, postId, dropdown);
+                const commentId = item.dataset.commentId;
+                this.handleNotificationClick(id, postId, commentId, dropdown);
             });
         });
     }
@@ -333,11 +336,19 @@ class NotificationManager {
         this.isDropdownOpen = false;
     }
 
-    handleNotificationClick(notificationId, postId, dropdown) {
-        this.markAsRead(notificationId);
+    async handleNotificationClick(notificationId, postId, commentId, dropdown) {
+        try {
+            await this.markAsRead(notificationId);
+        } catch (e) {
+            console.error('Mark notification as read failed:', e);
+        }
         this.closeDropdown(dropdown);
         if (postId) {
-            window.location.href = `/post.html?id=${postId}#comment-section`;
+            let url = `/post.html?id=${postId}`;
+            if (commentId) {
+                url += `&comment_id=${commentId}`;
+            }
+            window.location.href = url;
         }
     }
 }

@@ -2336,6 +2336,29 @@ mark.ann-mark-annotated:hover {
     }
 }
 
+/* ===== Comment Highlight (from notification) ===== */
+.comment-highlight-target {
+    position: relative;
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(99, 102, 241, 0.05)) !important;
+    border: 2px solid var(--primary-color) !important;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15), var(--shadow-md) !important;
+    transform: scale(1.01);
+    transition: all 0.3s ease;
+}
+
+.comment-highlight-pulse {
+    animation: comment-highlight-pulse 1.5s ease-in-out 2;
+}
+
+@keyframes comment-highlight-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15), var(--shadow-md);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(79, 70, 229, 0.25), 0 0 20px rgba(79, 70, 229, 0.3), var(--shadow-md);
+    }
+}
+
 .revision-item {
     padding: 12px;
     border-bottom: 1px solid #e5e7eb;
