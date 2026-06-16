@@ -1135,6 +1135,54 @@ mark.ann-mark-annotated:hover {
     pointer-events: none;
 }
 
+.node-jump-btn {
+    cursor: pointer;
+}
+
+.jump-btn-bg {
+    fill: white;
+    stroke: #10b981;
+    stroke-width: 2;
+    transition: all 0.15s ease;
+}
+
+.node-jump-btn:hover .jump-btn-bg {
+    fill: #10b981;
+    stroke: #10b981;
+}
+
+.node-jump-btn:hover .jump-btn-icon {
+    fill: white;
+}
+
+.jump-btn-icon {
+    font-size: 12px;
+    font-weight: 700;
+    fill: #10b981;
+    pointer-events: none;
+}
+
+.node-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.node-jump-hint {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.root-node .node-jump-hint {
+    color: rgba(255, 255, 255, 0.6);
+}
+
 .aggregation-btn-bg {
     fill: #fef3c7 !important;
     stroke: #f59e0b !important;

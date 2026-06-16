@@ -513,33 +513,36 @@ export class CommentMindMap {
 
         this.nodesGroup.querySelectorAll('.mindmap-node').forEach(el => {
             const nodeId = el.dataset.nodeId;
+            const node = this.flatNodes.find(n => String(n.id) === String(nodeId));
+            if (!node) return;
 
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const node = this.flatNodes.find(n => String(n.id) === String(nodeId));
-                if (node) {
-                    this.options.onNodeClick(node);
-                }
-            });
-
-            el.addEventListener('dblclick', (e) => {
-                e.stopPropagation();
-                const node = this.flatNodes.find(n => String(n.id) === String(nodeId));
-                if (node && node.type !== 'aggregation' && node.children && node.children.length > 0) {
-                    this.toggleNode(nodeId);
-                } else if (node && node.type === 'aggregation') {
-                    this.expandAggregation(node);
-                }
-            });
+            const nodeBody = el.querySelector('.node-body');
+            if (nodeBody) {
+                nodeBody.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (node.type === 'aggregation') {
+                        this.expandAggregation(node);
+                    } else if (node.children && node.children.length > 0) {
+                        this.toggleNode(nodeId);
+                    }
+                });
+            }
 
             const expandBtn = el.querySelector('.node-expand-btn');
             if (expandBtn) {
                 expandBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const node = this.flatNodes.find(n => String(n.id) === String(nodeId));
-                    if (node && node.type !== 'aggregation' && node.children && node.children.length > 0) {
+                    if (node.type !== 'aggregation' && node.children && node.children.length > 0) {
                         this.toggleNode(nodeId);
                     }
+                });
+            }
+
+            const jumpBtn = el.querySelector('.node-jump-btn');
+            if (jumpBtn) {
+                jumpBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.options.onNodeClick(node);
                 });
             }
 
@@ -547,8 +550,7 @@ export class CommentMindMap {
             if (aggBtn) {
                 aggBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const node = this.flatNodes.find(n => String(n.id) === String(nodeId));
-                    if (node && node.type === 'aggregation') {
+                    if (node.type === 'aggregation') {
                         this.expandAggregation(node);
                     }
                 });
@@ -569,30 +571,46 @@ export class CommentMindMap {
                          'mindmap-node reply-node';
 
         const descendantCount = node.descendant_count || 0;
+        const showJumpBtn = !isRoot;
 
         return `
             <g class="${nodeClass}" data-node-id="${node.id}" 
                transform="translate(${node.x}, ${node.y})" filter="url(#node-shadow)">
                 <rect class="node-bg" width="${node.width}" height="${node.height}" rx="8"/>
-                <foreignObject width="${node.width}" height="${node.height}">
+                <foreignObject width="${node.width}" height="${node.height}" class="node-body">
                     <div xmlns="http://www.w3.org/1999/xhtml" class="node-content">
                         <div class="node-header">
                             <span class="node-author">${escapeHtml(node.author_name)}</span>
                             ${descendantCount > 0 ? `<span class="node-badge">${descendantCount}</span>` : ''}
                         </div>
                         <div class="node-summary">${escapeHtml(node.content_summary || node.content.substring(0, 50))}</div>
-                        <div class="node-meta">
-                            <i class="bi bi-clock"></i>
-                            ${formatDate(node.created_at)}
+                        <div class="node-footer">
+                            <span class="node-meta">
+                                <i class="bi bi-clock"></i>
+                                ${formatDate(node.created_at)}
+                            </span>
+                            ${showJumpBtn ? `
+                                <span class="node-jump-hint" title="点击右侧按钮跳转到评论">
+                                    单击节点${hasChildren ? '展开/折叠' : '查看'}
+                                </span>
+                            ` : ''}
                         </div>
                     </div>
                 </foreignObject>
+                ${showJumpBtn ? `
+                    <g class="node-jump-btn" transform="translate(${node.width - 5}, 12)">
+                        <circle r="10" class="jump-btn-bg"/>
+                        <text class="jump-btn-icon" text-anchor="middle" dominant-baseline="central">→</text>
+                        <title>跳转到评论</title>
+                    </g>
+                ` : ''}
                 ${hasChildren ? `
                     <g class="node-expand-btn" transform="translate(${node.width - 5}, ${node.height / 2})">
                         <circle r="10" class="expand-btn-bg"/>
                         <text class="expand-btn-icon" text-anchor="middle" dominant-baseline="central">
                             ${isCollapsed ? '+' : '−'}
                         </text>
+                        <title>${isCollapsed ? '展开子回复' : '折叠子回复'}</title>
                     </g>
                 ` : ''}
             </g>
@@ -604,7 +622,7 @@ export class CommentMindMap {
             <g class="mindmap-node aggregation-node" data-node-id="${node.id}"
                transform="translate(${node.x}, ${node.y})" filter="url(#node-shadow)">
                 <rect class="node-bg aggregation-bg" width="${node.width}" height="${node.height}" rx="8"/>
-                <foreignObject width="${node.width}" height="${node.height}">
+                <foreignObject width="${node.width}" height="${node.height}" class="node-body">
                     <div xmlns="http://www.w3.org/1999/xhtml" class="node-content aggregation-content">
                         <div class="aggregation-icon">
                             <i class="bi bi-layers"></i>
@@ -612,12 +630,13 @@ export class CommentMindMap {
                         <div class="aggregation-text">
                             还有 <strong>+${node.count}</strong> 条回复
                         </div>
-                        <div class="aggregation-hint">双击展开</div>
+                        <div class="aggregation-hint">单击节点或右侧 + 展开</div>
                     </div>
                 </foreignObject>
                 <g class="aggregation-btn" transform="translate(${node.width - 5}, ${node.height / 2})">
                     <circle r="10" class="expand-btn-bg aggregation-btn-bg"/>
                     <text class="expand-btn-icon" text-anchor="middle" dominant-baseline="central">+</text>
+                    <title>展开这些回复</title>
                 </g>
             </g>
         `;

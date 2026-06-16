@@ -1328,10 +1328,15 @@ async function pollNewComments() {
             }
 
             if (newCommentsToAdd.length > 0) {
-                newCommentsToAdd.forEach(comment => {
-                    appendCommentToList(comment);
-                });
                 updateCommentCount();
+                
+                if (currentViewMode === 'list') {
+                    refreshCommentsView();
+                }
+                
+                if (currentViewMode === 'mindmap' && mindMapInstance) {
+                    refreshMindMapData();
+                }
             }
         }
     } catch (err) {
@@ -1339,8 +1344,35 @@ async function pollNewComments() {
     }
 }
 
+function refreshCommentsView() {
+    const listView = document.getElementById('comments-list-view');
+    if (!listView) return;
+    
+    listView.innerHTML = renderCommentListWithHierarchy(allComments);
+    
+    listView.querySelectorAll('.reply-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = Number(btn.dataset.commentId);
+            startReply(commentId);
+        });
+    });
+}
+
+async function refreshMindMapData() {
+    try {
+        const treeData = await fetchApi(`/comments.php?post_id=${postId}&view=tree`);
+        commentTreeData = treeData;
+        if (mindMapInstance) {
+            mindMapInstance.setData(commentTreeData.tree, currentPostData.post);
+        }
+    } catch (e) {
+        console.warn('[MindMap] refresh failed:', e);
+    }
+}
+
 function appendCommentToList(comment) {
-    const list = document.getElementById('comments-list');
+    const list = document.getElementById('comments-list-view');
     if (!list) return;
 
     const emptyTip = list.querySelector('.text-muted.mb-4');
