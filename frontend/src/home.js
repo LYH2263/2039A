@@ -1,3 +1,4 @@
+import './styles.css';
 import { fetchApi, formatDate, escapeHtml } from './config.js';
 import { renderHeader } from './header.js';
 

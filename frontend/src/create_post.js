@@ -1,3 +1,4 @@
+import './styles.css';
 import { fetchApi, escapeHtml } from './config.js';
 import { renderHeader } from './header.js';
 import { renderMarkdownSafe } from './markdown.js';
