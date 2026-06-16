@@ -15,17 +15,52 @@ const ALLOWED_TAGS = [
     'div', 'span'
 ];
 
-const ALLOWED_ATTRS = {
-    'a': ['href', 'title', 'target', 'rel'],
-    'img': ['src', 'alt', 'title', 'width', 'height'],
-    'th': ['align', 'colspan', 'rowspan'],
-    'td': ['align', 'colspan', 'rowspan'],
-    'div': ['class'],
-    'span': ['class'],
-    'code': ['class'],
-    'pre': ['class'],
-    '*': ['id']
+const TAG_ATTR_WHITELIST = {
+    'a':          ['href', 'title', 'target', 'rel'],
+    'img':        ['src', 'alt', 'title', 'width', 'height', 'loading', 'referrerpolicy'],
+    'th':         ['align', 'colspan', 'rowspan'],
+    'td':         ['align', 'colspan', 'rowspan'],
+    'code':       ['class'],
+    'pre':        ['class'],
+    'div':        ['class'],
+    'span':       ['class'],
+    'ol':         ['start', 'type'],
+    'li':         ['value'],
+    'blockquote': ['cite'],
+    'q':          ['cite'],
+    'table':      [],
+    'thead':      [],
+    'tbody':      [],
+    'tfoot':      [],
+    'tr':         [],
+    'h1':         ['id'],
+    'h2':         ['id'],
+    'h3':         ['id'],
+    'h4':         ['id'],
+    'h5':         ['id'],
+    'h6':         ['id'],
+    'p':          [],
+    'br':         [],
+    'hr':         [],
+    'strong':     [],
+    'b':          [],
+    'em':         [],
+    'i':          [],
+    'u':          [],
+    's':          [],
+    'del':        [],
+    'ins':        [],
+    'mark':       [],
+    'ul':         [],
+    'kbd':        [],
+    'samp':       [],
+    'var':        [],
+    'cite':       [],
 };
+
+const ALL_ALLOWED_ATTRS = [...new Set(
+    Object.values(TAG_ATTR_WHITELIST).flat()
+)];
 
 const FORBIDDEN_PROTOCOLS = ['javascript:', 'vbscript:', 'data:'];
 
@@ -53,29 +88,12 @@ function sanitizeHref(href) {
     return href;
 }
 
-function buildAttributeWhitelist() {
-    const result = {};
-    for (const tag of ALLOWED_TAGS) {
-        result[tag] = ['class', 'id', 'style'];
-    }
-    for (const [tag, attrs] of Object.entries(ALLOWED_ATTRS)) {
-        if (tag === '*') continue;
-        if (!result[tag]) result[tag] = [];
-        for (const attr of attrs) {
-            if (!result[tag].includes(attr)) {
-                result[tag].push(attr);
-            }
-        }
-    }
-    return result;
-}
-
 const purifyConfig = {
     ALLOWED_TAGS: ALLOWED_TAGS,
-    ALLOWED_ATTR: buildAttributeWhitelist(),
+    ALLOWED_ATTR: ALL_ALLOWED_ATTRS,
     ALLOW_DATA_ATTR: false,
     FORBID_TAGS: ['script', 'style', 'iframe', 'frame', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'option', 'noscript', 'meta', 'link', 'base'],
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onkeydown', 'onkeypress', 'onkeyup', 'onsubmit', 'onreset', 'onchange', 'onblur', 'onfocus', 'ondblclick', 'oncontextmenu', 'ondrag', 'ondragend', 'ondragenter', 'ondragleave', 'ondragover', 'ondragstart', 'ondrop', 'oncopy', 'oncut', 'onpaste', 'onbeforecopy', 'onbeforecut', 'onbeforepaste', 'onresize', 'onscroll', 'onunload', 'onabort', 'onbeforeunload', 'onerror', 'onhashchange', 'onmessage', 'onoffline', 'ononline', 'onpagehide', 'onpageshow', 'onpopstate', 'onstorage', 'ontoggle', 'onwheel', 'onpointerdown', 'onpointerup', 'onpointermove', 'onpointerover', 'onpointerout', 'onpointerenter', 'onpointerleave', 'onpointercancel', 'ongotpointercapture', 'onlostpointercapture', 'onauxclick', 'onpointerlockchange', 'onpointerlockerror', 'onselect', 'onselectionchange', 'onselectstart', 'ontouchcancel', 'ontouchend', 'ontouchmove', 'ontouchstart', 'onanimationend', 'onanimationiteration', 'onanimationstart', 'ontransitionend', 'ontransitionrun', 'ontransitionstart', 'ontransitioncancel', 'oncanplay', 'oncanplaythrough', 'ondurationchange', 'onemptied', 'onended', 'onloadeddata', 'onloadedmetadata', 'onloadstart', 'onpause', 'onplay', 'onplaying', 'onprogress', 'onratechange', 'onseeked', 'onseeking', 'onstalled', 'onsuspend', 'ontimeupdate', 'onvolumechange', 'onwaiting', 'onfullscreenchange', 'onfullscreenerror', 'oncopy', 'oncut', 'onpaste'],
+    FORBID_ATTR: ['style'],
     SAFE_FOR_TEMPLATES: false,
     WHOLE_DOCUMENT: false,
     SANITIZE_DOM: true,
@@ -84,7 +102,34 @@ const purifyConfig = {
     ALLOW_UNKNOWN_PROTOCOLS: false,
     ADD_TAGS: [],
     ADD_ATTR: [],
+    RETURN_DOM_FRAGMENT: true,
 };
+
+function enforceStrictAttributes(fragment) {
+    const elements = fragment.querySelectorAll('*');
+    elements.forEach(el => {
+        const tagName = el.tagName.toLowerCase();
+        const allowed = TAG_ATTR_WHITELIST[tagName];
+        if (!allowed) {
+            return;
+        }
+        const attrNames = [...el.attributes].map(a => a.name);
+        for (const attrName of attrNames) {
+            if (!allowed.includes(attrName)) {
+                el.removeAttribute(attrName);
+            }
+        }
+    });
+}
+
+function fragmentToHtml(fragment) {
+    const serializer = new XMLSerializer();
+    let html = '';
+    for (const child of fragment.childNodes) {
+        html += serializer.serializeToString(child);
+    }
+    return html;
+}
 
 export function renderMarkdownSafe(markdownText) {
     if (markdownText === null || markdownText === undefined) {
@@ -99,6 +144,7 @@ export function renderMarkdownSafe(markdownText) {
 
     try {
         let rawHtml = marked.parse(text);
+
         rawHtml = rawHtml.replace(/<a\s+([^>]*?)\s*>/gi, (match, attrs) => {
             let cleanedAttrs = attrs;
             cleanedAttrs = cleanedAttrs.replace(/(href\s*=\s*)(["']?)([^"'\s>]*)(\2)/gi, (m, prefix, quote, value, endQuote) => {
@@ -130,11 +176,16 @@ export function renderMarkdownSafe(markdownText) {
             return `<img ${cleanedAttrs} loading="lazy" referrerpolicy="no-referrer">`;
         });
 
-        const cleanHtml = DOMPurify.sanitize(rawHtml, purifyConfig);
+        const fragment = DOMPurify.sanitize(rawHtml, purifyConfig);
 
-        if (typeof cleanHtml !== 'string') {
-            throw new Error('Purify returned non-string result');
-        }
+        enforceStrictAttributes(fragment);
+
+        let cleanHtml = fragmentToHtml(fragment);
+
+        cleanHtml = cleanHtml.replace(/<br\s*\/?>/gi, '<br>');
+        cleanHtml = cleanHtml.replace(/<hr\s*\/?>/gi, '<hr>');
+        cleanHtml = cleanHtml.replace(/<img([^>]*?)\s*\/>/gi, '<img$1>');
+        cleanHtml = cleanHtml.replace(/\s+xmlns="[^"]*"/gi, '');
 
         return cleanHtml;
     } catch (error) {
