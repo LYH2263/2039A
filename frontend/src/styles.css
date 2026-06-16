@@ -1285,6 +1285,45 @@ mark.ann-mark-annotated:hover {
     background: #e5e7eb;
 }
 
+.reply-container .reply-container {
+    margin-left: 32px;
+}
+
+.reply-container .reply-container::before {
+    left: -16px;
+    width: 16px;
+}
+
+.reply-container .reply-container .reply-container {
+    margin-left: 24px;
+}
+
+.reply-container .reply-container .reply-container::before {
+    left: -12px;
+    width: 12px;
+}
+
+.reply-container .reply-container .reply-container .reply-container {
+    margin-left: 20px;
+}
+
+.reply-container .reply-container .reply-container .reply-container::before {
+    left: -10px;
+    width: 10px;
+}
+
+.reply-container .reply-container .reply-container .reply-container .reply-container,
+.reply-container .reply-container .reply-container .reply-container .reply-container .reply-container,
+.reply-container .reply-container .reply-container .reply-container .reply-container .reply-container {
+    margin-left: 20px;
+}
+
+.reply-container .reply-container .reply-container .reply-container .reply-container::before,
+.reply-container .reply-container .reply-container .reply-container .reply-container .reply-container::before {
+    left: -10px;
+    width: 10px;
+}
+
 .reply-item {
     background: #fafafa !important;
     border-left: 3px solid #e5e7eb !important;
@@ -1292,6 +1331,30 @@ mark.ann-mark-annotated:hover {
 
 .reply-item:hover {
     border-left-color: var(--primary-color) !important;
+}
+
+.reply-container .reply-item {
+    border-left-color: #d1d5db !important;
+}
+
+.reply-container .reply-container .reply-item {
+    border-left-color: #9ca3af !important;
+}
+
+.reply-container .reply-container .reply-container .reply-item {
+    border-left-color: #6b7280 !important;
+}
+
+.reply-container .reply-container .reply-container .reply-container .reply-item {
+    border-left-color: #4f46e5 !important;
+}
+
+.reply-container .reply-container .reply-container .reply-container .reply-container .reply-item {
+    border-left-color: #7c3aed !important;
+}
+
+.reply-container .reply-container .reply-container .reply-container .reply-container .reply-container .reply-item {
+    border-left-color: #a855f7 !important;
 }
 
 .reply-to-badge {
@@ -1307,6 +1370,10 @@ mark.ann-mark-annotated:hover {
 .more-replies-wrapper {
     margin-left: 40px;
     margin-bottom: 12px;
+}
+
+.reply-container .more-replies-wrapper {
+    margin-left: 0;
 }
 
 .more-replies-btn {
@@ -1328,16 +1395,6 @@ mark.ann-mark-annotated:hover {
 
 .reply-container.deep-replies .reply-item {
     background: #fefefe !important;
-    border-left-color: #d1d5db !important;
-}
-
-.reply-container.deep-replies .reply-container {
-    margin-left: 28px;
-}
-
-.reply-container.deep-replies .reply-container::before {
-    left: -14px;
-    width: 14px;
 }
 
 .reply-btn {
@@ -1422,6 +1479,37 @@ mark.ann-mark-annotated:hover {
 
     .comment-item.with-replies::before {
         left: 10px;
+    }
+
+    .reply-container .reply-container {
+        margin-left: 16px;
+    }
+
+    .reply-container .reply-container::before {
+        left: -8px;
+        width: 8px;
+    }
+
+    .reply-container .reply-container .reply-container {
+        margin-left: 12px;
+    }
+
+    .reply-container .reply-container .reply-container::before {
+        left: -6px;
+        width: 6px;
+    }
+
+    .reply-container .reply-container .reply-container .reply-container {
+        margin-left: 12px;
+    }
+
+    .reply-container .reply-container .reply-container .reply-container::before {
+        left: -6px;
+        width: 6px;
+    }
+
+    .more-replies-wrapper {
+        margin-left: 20px;
     }
 }
 

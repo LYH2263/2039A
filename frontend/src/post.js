@@ -722,6 +722,19 @@ function toggleRepliesExpand(commentId) {
     renderPost(currentPostData);
 }
 
+function expandCommentChain(commentId) {
+    const id = Number(commentId);
+    const comment = allComments.find(c => Number(c.id) === id);
+    if (!comment) return;
+
+    let currentParentId = comment.parent_id ? Number(comment.parent_id) : null;
+    while (currentParentId !== null) {
+        expandedReplies.add(currentParentId);
+        const parent = allComments.find(c => Number(c.id) === currentParentId);
+        currentParentId = parent && parent.parent_id ? Number(parent.parent_id) : null;
+    }
+}
+
 function refreshComments() {
     return Promise.all([
         fetchApi(`/post.php?id=${postId}`),
@@ -1122,6 +1135,13 @@ async function handleCommentSubmit(e) {
                 } catch (err) {
                     console.warn('[Danmaku] add new comment failed:', err);
                 }
+            }
+
+            if (replyToCommentId !== null || newComment.parent_id !== null) {
+                expandCommentChain(newComment.id);
+                refreshComments().then(() => {
+                    setTimeout(() => scrollToComment(newComment.id), 100);
+                });
             }
         }
     } catch (error) {
