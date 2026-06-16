@@ -23,6 +23,8 @@ check_admin_auth();
 $conn = get_db_connection();
 $admin_user = ADMIN_USER;
 
+ensure_reports_table_exists($conn);
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $status_filter = isset($_GET['status']) ? $_GET['status'] : 'pending';
     $valid_statuses = ['pending', 'handled'];
@@ -31,54 +33,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     if ($status_filter === 'pending') {
-        $status_where = "r.status = 'pending'";
+        $status_where = "status = 'pending'";
     } else {
-        $status_where = "r.status IN ('ignored', 'deleted')";
+        $status_where = "status IN ('ignored', 'deleted')";
     }
 
     $sql = "SELECT 
-        r.id, r.target_type, r.target_id, r.post_id, r.reporter_name, r.reason, r.remark,
-        r.status, r.target_snapshot, r.target_author, r.handled_at, r.handled_by, r.created_at,
-        p.title as post_title,
-        c.post_id as comment_post_id,
-        (SELECT COUNT(*) FROM reports r2 
-         WHERE r2.target_type = r.target_type AND r2.target_id = r.target_id 
-         AND r2.status = 'pending') as same_target_pending_count,
-        (SELECT GROUP_CONCAT(DISTINCT reason SEPARATOR '|') FROM reports r2 
-         WHERE r2.target_type = r.target_type AND r2.target_id = r.target_id 
-         AND r2.status = 'pending') as same_target_reasons
-    FROM reports r
-    LEFT JOIN posts p ON r.target_type = 'post' AND r.target_id = p.id
-    LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.id
+        id, target_type, target_id, post_id, reporter_name, reason, remark,
+        status, target_snapshot, target_author, handled_at, handled_by, created_at
+    FROM reports
     WHERE {$status_where}
-    GROUP BY r.target_type, r.target_id, r.id
-    ORDER BY r.created_at DESC";
+    ORDER BY created_at DESC";
 
     $result = $conn->query($sql);
-    $raw_reports = [];
+    $all_reports = [];
     while ($row = $result->fetch_assoc()) {
-        $raw_reports[] = $row;
+        $all_reports[] = $row;
     }
 
-    $grouped = [];
+    $target_info = [];
+    foreach ($all_reports as $r) {
+        $tt = $r['target_type'];
+        $tid = (int)$r['target_id'];
+        $key = $tt . '_' . $tid;
+        if (!isset($target_info[$key])) {
+            if ($tt === 'post') {
+                $stmt = $conn->prepare("SELECT title FROM posts WHERE id = ?");
+                $stmt->bind_param("i", $tid);
+                $stmt->execute();
+                $p_result = $stmt->get_result();
+                $target_info[$key] = [
+                    'post_title' => $p_result->num_rows > 0 ? $p_result->fetch_assoc()['title'] : null,
+                    'comment_post_id' => null
+                ];
+                $stmt->close();
+            } else {
+                $stmt = $conn->prepare("SELECT post_id FROM comments WHERE id = ?");
+                $stmt->bind_param("i", $tid);
+                $stmt->execute();
+                $c_result = $stmt->get_result();
+                $comment_post_id = $c_result->num_rows > 0 ? (int)$c_result->fetch_assoc()['post_id'] : null;
+                $stmt->close();
+
+                $post_title = null;
+                if ($comment_post_id !== null) {
+                    $stmt2 = $conn->prepare("SELECT title FROM posts WHERE id = ?");
+                    $stmt2->bind_param("i", $comment_post_id);
+                    $stmt2->execute();
+                    $p_result = $stmt2->get_result();
+                    if ($p_result->num_rows > 0) {
+                        $post_title = $p_result->fetch_assoc()['title'];
+                    }
+                    $stmt2->close();
+                }
+                $target_info[$key] = [
+                    'post_title' => $post_title,
+                    'comment_post_id' => $comment_post_id
+                ];
+            }
+        }
+    }
+
+    $agg_counts = [];
+    $agg_reasons = [];
+    $count_sql = "SELECT target_type, target_id, COUNT(*) as cnt, 
+                  GROUP_CONCAT(DISTINCT reason SEPARATOR '|') as reasons
+                  FROM reports WHERE status = 'pending' 
+                  GROUP BY target_type, target_id";
+    $count_result = $conn->query($count_sql);
+    while ($row = $count_result->fetch_assoc()) {
+        $key = $row['target_type'] . '_' . $row['target_id'];
+        $agg_counts[$key] = (int)$row['cnt'];
+        $agg_reasons[$key] = $row['reasons'];
+    }
+
     $seen = [];
-    foreach ($raw_reports as $r) {
+    $reports = [];
+    foreach ($all_reports as $r) {
         $key = $r['target_type'] . '_' . $r['target_id'];
         if ($status_filter === 'pending') {
             if (isset($seen[$key])) continue;
             $seen[$key] = true;
         }
-        $grouped[] = $r;
-    }
 
-    $reports = [];
-    foreach ($grouped as $r) {
+        $info = $target_info[$key] ?? ['post_title' => null, 'comment_post_id' => null];
         $reports[] = [
             'id' => (int)$r['id'],
             'target_type' => $r['target_type'],
             'target_id' => (int)$r['target_id'],
             'post_id' => (int)$r['post_id'],
-            'post_title' => $r['post_title'],
+            'post_title' => $info['post_title'],
             'reporter_name' => $r['reporter_name'],
             'reason' => $r['reason'],
             'remark' => $r['remark'],
@@ -88,15 +132,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'handled_at' => $r['handled_at'],
             'handled_by' => $r['handled_by'],
             'created_at' => $r['created_at'],
-            'same_target_pending_count' => (int)$r['same_target_pending_count'],
-            'same_target_reasons' => $r['same_target_reasons'],
+            'same_target_pending_count' => $agg_counts[$key] ?? 0,
+            'same_target_reasons' => $agg_reasons[$key] ?? null,
             'target_exists' => $r['target_type'] === 'post' ? 
-                ($r['post_title'] !== null) : 
-                ($r['comment_post_id'] !== null)
+                ($info['post_title'] !== null) : 
+                ($info['comment_post_id'] !== null)
         ];
     }
 
     $stats_sql = "SELECT 
+        COUNT(*) as total_count,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
         SUM(CASE WHEN status IN ('ignored','deleted') THEN 1 ELSE 0 END) as handled_count
     FROM reports";
@@ -137,47 +182,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
         if ($action === 'delete_content') {
             if ($target_type === 'post') {
-                $old_tag_ids = [];
-                $tag_result = $conn->query("SELECT tag_id FROM post_tags WHERE post_id = $target_id");
-                while ($row = $tag_result->fetch_assoc()) {
-                    $old_tag_ids[] = $row['tag_id'];
-                }
+                $check_stmt = $conn->prepare("SELECT id FROM posts WHERE id = ?");
+                $check_stmt->bind_param("i", $target_id);
+                $check_stmt->execute();
+                $post_exists = $check_stmt->get_result()->num_rows > 0;
+                $check_stmt->close();
 
-                $stmt = $conn->prepare("DELETE FROM posts WHERE id = ?");
-                $stmt->bind_param("i", $target_id);
-                $stmt->execute();
-                $stmt->close();
-
-                foreach ($old_tag_ids as $tag_id) {
-                    updateTagPostCount($conn, $tag_id);
-                }
-            } else {
-                $stmt = $conn->prepare("SELECT parent_id, post_id FROM comments WHERE id = ?");
-                $stmt->bind_param("i", $target_id);
-                $stmt->execute();
-                $c_result = $stmt->get_result();
-                if ($c_result->num_rows > 0) {
-                    $comment = $c_result->fetch_assoc();
-                    $new_parent_id = $comment['parent_id'];
-                    $stmt->close();
-
-                    $stmt = $conn->prepare("UPDATE comments SET parent_id = ? WHERE parent_id = ?");
-                    $null_val = null;
-                    if ($new_parent_id === null) {
-                        $stmt->bind_param("ii", $null_val, $target_id);
-                    } else {
-                        $stmt->bind_param("ii", $new_parent_id, $target_id);
+                if ($post_exists) {
+                    $old_tag_ids = [];
+                    $tag_stmt = $conn->prepare("SELECT tag_id FROM post_tags WHERE post_id = ?");
+                    $tag_stmt->bind_param("i", $target_id);
+                    $tag_stmt->execute();
+                    $tag_result = $tag_stmt->get_result();
+                    while ($row = $tag_result->fetch_assoc()) {
+                        $old_tag_ids[] = $row['tag_id'];
                     }
+                    $tag_stmt->close();
+
+                    $stmt = $conn->prepare("DELETE FROM posts WHERE id = ?");
+                    $stmt->bind_param("i", $target_id);
                     $stmt->execute();
                     $stmt->close();
-                } else {
+
+                    foreach ($old_tag_ids as $tag_id) {
+                        updateTagPostCount($conn, $tag_id);
+                    }
+                }
+            } else {
+                $check_stmt = $conn->prepare("SELECT id FROM comments WHERE id = ?");
+                $check_stmt->bind_param("i", $target_id);
+                $check_stmt->execute();
+                $comment_exists = $check_stmt->get_result()->num_rows > 0;
+                $check_stmt->close();
+
+                if ($comment_exists) {
+                    $stmt = $conn->prepare("SELECT parent_id, post_id FROM comments WHERE id = ?");
+                    $stmt->bind_param("i", $target_id);
+                    $stmt->execute();
+                    $c_result = $stmt->get_result();
+                    if ($c_result->num_rows > 0) {
+                        $comment = $c_result->fetch_assoc();
+                        $new_parent_id = $comment['parent_id'];
+                        $stmt->close();
+
+                        $stmt = $conn->prepare("UPDATE comments SET parent_id = ? WHERE parent_id = ?");
+                        if ($new_parent_id === null) {
+                            $null_val = null;
+                            $stmt->bind_param("si", $null_val, $target_id);
+                        } else {
+                            $new_parent_id_int = (int)$new_parent_id;
+                            $stmt->bind_param("ii", $new_parent_id_int, $target_id);
+                        }
+                        $stmt->execute();
+                        $stmt->close();
+                    } else {
+                        $stmt->close();
+                    }
+
+                    $stmt = $conn->prepare("DELETE FROM comments WHERE id = ?");
+                    $stmt->bind_param("i", $target_id);
+                    $stmt->execute();
                     $stmt->close();
                 }
-
-                $stmt = $conn->prepare("DELETE FROM comments WHERE id = ?");
-                $stmt->bind_param("i", $target_id);
-                $stmt->execute();
-                $stmt->close();
             }
         }
 
@@ -193,6 +259,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     } catch (Exception $e) {
         $conn->rollback();
         jsonResponse(['error' => '操作失败: ' . $e->getMessage()], 500);
+    }
+}
+
+if (!function_exists('ensure_reports_table_exists')) {
+    function ensure_reports_table_exists($conn) {
+        $check = $conn->query("SHOW TABLES LIKE 'reports'");
+        if ($check->num_rows === 0) {
+            $sql = "CREATE TABLE IF NOT EXISTS `reports` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `target_type` ENUM('post', 'comment') NOT NULL COMMENT '举报对象类型：帖子或评论',
+                `target_id` INT NOT NULL COMMENT '举报对象ID',
+                `post_id` INT NOT NULL COMMENT '所属帖子ID',
+                `reporter_name` VARCHAR(100) NOT NULL COMMENT '举报人昵称',
+                `reason` VARCHAR(50) NOT NULL COMMENT '举报理由分类',
+                `remark` TEXT DEFAULT NULL COMMENT '举报人补充备注',
+                `status` ENUM('pending', 'ignored', 'deleted') NOT NULL DEFAULT 'pending' COMMENT '处理状态',
+                `target_snapshot` TEXT DEFAULT NULL COMMENT '举报对象内容快照',
+                `target_author` VARCHAR(100) DEFAULT NULL COMMENT '举报对象作者快照',
+                `handled_at` DATETIME DEFAULT NULL COMMENT '处理时间',
+                `handled_by` VARCHAR(100) DEFAULT NULL COMMENT '处理人',
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '举报时间',
+                UNIQUE KEY `unique_report` (`target_type`, `target_id`, `reporter_name`),
+                INDEX `idx_status` (`status`),
+                INDEX `idx_target` (`target_type`, `target_id`),
+                INDEX `idx_created_at` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+            $conn->query($sql);
+        }
     }
 }
 ?>

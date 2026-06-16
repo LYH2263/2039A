@@ -13,9 +13,11 @@
  * - 409 Conflict: 同一用户重复举报同一内容
  */
 
-require_once './db.php';
+require_once '../db.php';
 
 $conn = get_db_connection();
+
+ensure_reports_table_exists($conn);
 
 $VALID_REASONS = [
     'spam', 'abuse', 'porn', 'violence', 'illegal', 'privacy', 'copyright', 'other'
@@ -70,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $comment = $result->fetch_assoc();
         $post_id = (int)$comment['post_id'];
-        $target_snapshot = "所属帖子：" . ($comment['title'] . "\n\n评论内容：" . $comment['content'];
+        $target_snapshot = "所属帖子：" . $comment['title'] . "\n\n评论内容：" . $comment['content'];
         $target_author = $comment['author_name'];
     }
 
@@ -96,5 +98,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 } else {
     jsonResponse(['error' => 'Method Not Allowed'], 405);
+}
+
+function ensure_reports_table_exists($conn) {
+    $check = $conn->query("SHOW TABLES LIKE 'reports'");
+    if ($check->num_rows === 0) {
+        $sql = "CREATE TABLE IF NOT EXISTS `reports` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `target_type` ENUM('post', 'comment') NOT NULL COMMENT '举报对象类型：帖子或评论',
+            `target_id` INT NOT NULL COMMENT '举报对象ID',
+            `post_id` INT NOT NULL COMMENT '所属帖子ID',
+            `reporter_name` VARCHAR(100) NOT NULL COMMENT '举报人昵称',
+            `reason` VARCHAR(50) NOT NULL COMMENT '举报理由分类',
+            `remark` TEXT DEFAULT NULL COMMENT '举报人补充备注',
+            `status` ENUM('pending', 'ignored', 'deleted') NOT NULL DEFAULT 'pending' COMMENT '处理状态',
+            `target_snapshot` TEXT DEFAULT NULL COMMENT '举报对象内容快照',
+            `target_author` VARCHAR(100) DEFAULT NULL COMMENT '举报对象作者快照',
+            `handled_at` DATETIME DEFAULT NULL COMMENT '处理时间',
+            `handled_by` VARCHAR(100) DEFAULT NULL COMMENT '处理人',
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '举报时间',
+            UNIQUE KEY `unique_report` (`target_type`, `target_id`, `reporter_name`),
+            INDEX `idx_status` (`status`),
+            INDEX `idx_target` (`target_type`, `target_id`),
+            INDEX `idx_created_at` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+        $conn->query($sql);
+    }
 }
 ?>
