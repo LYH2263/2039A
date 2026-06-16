@@ -14,7 +14,6 @@ const postId = urlParams.get('id');
 
 let currentAnnotations = [];
 let activeAnnotationIds = [];
-let contentViewMode = 'markdown';
 
 let danmakuEngine = null;
 let danmakuPollTimer = null;
@@ -86,55 +85,6 @@ async function loadPost(id) {
     }
 }
 
-
-
-function buildHighlightedHtml(rawContent, annotations) {
-    const validated = validateAnnotations(rawContent, annotations);
-    if (validated.length === 0) {
-        return escapeHtml(rawContent);
-    }
-
-    const segments = buildSegments(rawContent.length, validated);
-    let html = '';
-    for (const seg of segments) {
-        const text = rawContent.substring(seg.start, seg.end);
-        const escaped = escapeHtml(text);
-        if (seg.annotationIds.length === 0) {
-            html += escaped;
-        } else {
-            const idsStr = seg.annotationIds.join(',');
-            const hasAnnotation = seg.annotationIds.some(id => {
-                const a = validated.find(a => a.id == id);
-                return a && a.type === 'annotation';
-            });
-            const cls = hasAnnotation ? 'ann-mark ann-mark-annotated' : 'ann-mark';
-            html += `<mark class="${cls}" data-ann-ids="${idsStr}">${escaped}</mark>`;
-        }
-    }
-    return html;
-}
-
-function validateAnnotations(rawContent, annotations) {
-    return annotations.filter(ann => {
-        if (ann.start_offset < 0 || ann.end_offset > rawContent.length || ann.start_offset >= ann.end_offset) {
-            return false;
-        }
-        const actual = rawContent.substring(ann.start_offset, ann.end_offset);
-        if (actual === ann.selected_text) {
-            return true;
-        }
-        const searchFrom = Math.max(0, ann.start_offset - 20);
-        const searchTo = Math.min(rawContent.length, ann.end_offset + 20);
-        const region = rawContent.substring(searchFrom, searchTo);
-        const idx = region.indexOf(ann.selected_text);
-        if (idx !== -1) {
-            ann.start_offset = searchFrom + idx;
-            ann.end_offset = ann.start_offset + ann.selected_text.length;
-            return true;
-        }
-        return false;
-    });
-}
 
 function buildSegments(contentLen, annotations) {
     const sorted = [...annotations].sort((a, b) => a.start_offset - b.start_offset || a.end_offset - b.end_offset);
@@ -460,44 +410,111 @@ function scrollToComment(commentId) {
     }
 }
 
-function buildMarkdownWithAnnotations(markdownText, annotations) {
-    const renderedHtml = renderMarkdownSafe(markdownText);
-    if (!annotations || annotations.length === 0) {
-        return renderedHtml;
+function applyAnnotationsToDOM(container, annotations) {
+    if (!annotations || annotations.length === 0) return;
+
+    const textContent = container.textContent;
+    const resolved = [];
+
+    for (const ann of annotations) {
+        if (!ann.selected_text) continue;
+        let start = -1;
+
+        if (ann.start_offset >= 0 && ann.end_offset <= textContent.length) {
+            const actual = textContent.substring(ann.start_offset, ann.end_offset);
+            if (actual === ann.selected_text) {
+                start = ann.start_offset;
+            }
+        }
+
+        if (start === -1) {
+            start = textContent.indexOf(ann.selected_text);
+        }
+
+        if (start !== -1) {
+            resolved.push({
+                ...ann,
+                domStart: start,
+                domEnd: start + ann.selected_text.length
+            });
+        }
     }
-    return renderedHtml;
+
+    if (resolved.length === 0) return;
+
+    const segments = buildSegments(textContent.length, resolved.map(r => ({
+        start_offset: r.domStart,
+        end_offset: r.domEnd,
+        id: r.id,
+        type: r.type
+    })));
+
+    const sortedSegments = [...segments].sort((a, b) => b.start - a.start);
+
+    for (const seg of sortedSegments) {
+        if (seg.annotationIds.length === 0) continue;
+
+        const idsStr = seg.annotationIds.join(',');
+        const hasAnnotation = seg.annotationIds.some(id => {
+            const a = resolved.find(r => r.id == id);
+            return a && a.type === 'annotation';
+        });
+        const cls = hasAnnotation ? 'ann-mark ann-mark-annotated' : 'ann-mark';
+
+        wrapDOMRange(container, seg.start, seg.end, cls, idsStr);
+    }
+
+    renderBadges(container);
 }
 
-function renderContentViewHeader() {
-    const hasAnnotations = currentAnnotations && currentAnnotations.length > 0;
+function wrapDOMRange(container, startOffset, endOffset, className, idsStr) {
+    const textNodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let cumLen = 0;
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.parentElement && node.parentElement.classList.contains('ann-badge')) continue;
+        textNodes.push({ node, start: cumLen, length: node.textContent.length });
+        cumLen += node.textContent.length;
+    }
+
+    const overlapping = textNodes.filter(tn => tn.start < endOffset && tn.start + tn.length > startOffset);
+    if (overlapping.length === 0) return;
+
+    for (let i = overlapping.length - 1; i >= 0; i--) {
+        const tn = overlapping[i];
+        const nodeStart = Math.max(startOffset, tn.start);
+        const nodeEnd = Math.min(endOffset, tn.start + tn.length);
+        const localStart = nodeStart - tn.start;
+        const localEnd = nodeEnd - tn.start;
+
+        const textNode = tn.node;
+
+        if (localEnd < textNode.textContent.length) {
+            textNode.splitText(localEnd);
+        }
+        if (localStart > 0) {
+            const highlightNode = textNode.splitText(localStart);
+            const mark = document.createElement('mark');
+            mark.className = className;
+            mark.dataset.annIds = idsStr;
+            highlightNode.parentNode.replaceChild(mark, highlightNode);
+            mark.appendChild(highlightNode);
+        } else {
+            const mark = document.createElement('mark');
+            mark.className = className;
+            mark.dataset.annIds = idsStr;
+            textNode.parentNode.replaceChild(mark, textNode);
+            mark.appendChild(textNode);
+        }
+    }
+}
+
+function renderPostContent(post) {
+    const contentHtml = renderMarkdownSafe(post.content);
     return `
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <span class="text-muted small"><i class="bi bi-eye"></i> 内容视图：</span>
-            <div class="btn-group btn-group-sm" role="tablist" id="content-view-toggle">
-                <button type="button" class="btn ${contentViewMode === 'markdown' ? 'btn-primary' : 'btn-outline-primary'}" data-view="markdown" role="tab">
-                    <i class="bi bi-file-earmark-markdown"></i> Markdown
-                </button>
-                <button type="button" class="btn ${contentViewMode === 'annotate' ? 'btn-primary' : 'btn-outline-primary'}" data-view="annotate" role="tab">
-                    <i class="bi bi-highlighter"></i> 批注模式
-                    ${hasAnnotations ? `<span class="badge bg-light text-primary ms-1">${currentAnnotations.length}</span>` : ''}
-                </button>
-            </div>
-        </div>
+        <div class="card-text markdown-body ann-content" id="post-content-wrapper" style="position: relative;">${contentHtml}</div>
     `;
-}
-
-function renderPostContentByMode(post) {
-    if (contentViewMode === 'annotate') {
-        const contentHtml = buildHighlightedHtml(post.content, currentAnnotations);
-        return `
-            <div class="card-text ann-content" id="post-content-wrapper" style="white-space: pre-wrap; position: relative;">${contentHtml}</div>
-        `;
-    } else {
-        const contentHtml = buildMarkdownWithAnnotations(post.content, currentAnnotations);
-        return `
-            <div class="card-text markdown-body" id="post-content-wrapper" style="position: relative;">${contentHtml}</div>
-        `;
-    }
 }
 
 function renderPost({ post, comments }) {
@@ -536,13 +553,12 @@ function renderPost({ post, comments }) {
                                 </label>
                             </div>
                         </div>
-                        ${renderContentViewHeader()}
                         ${renderTags(currentPostData.tags)}
                         <h6 class="card-subtitle mb-4 text-muted">
                             作者: ${escapeHtml(post.author_name)} |
                             发布于: ${formatDate(post.created_at)}
                         </h6>
-                        ${renderPostContentByMode(post)}
+                        ${renderPostContent(post)}
                     </div>
                 </div>
 
@@ -623,22 +639,17 @@ function renderPost({ post, comments }) {
 
     app.innerHTML = html;
 
-    if (contentViewMode === 'annotate') {
-        initAnnotationUI(post);
+    const contentEl = document.querySelector('.ann-content');
+    if (contentEl) {
+        applyAnnotationsToDOM(contentEl, currentAnnotations);
     }
+    initAnnotationUI(post);
     document.getElementById('comment-form').addEventListener('submit', handleCommentSubmit);
     initDanmakuUI();
     
     document.querySelectorAll('.view-toggle-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             switchViewMode(btn.dataset.view);
-        });
-    });
-
-    document.querySelectorAll('#content-view-toggle button').forEach(btn => {
-        btn.addEventListener('click', () => {
-            contentViewMode = btn.dataset.view;
-            renderPost(currentPostData);
         });
     });
     
@@ -732,26 +743,30 @@ function initAnnotationUI(post) {
     const contentEl = document.querySelector('.ann-content');
     if (!contentEl) return;
 
-    renderBadges(contentEl);
+    let bubble = document.getElementById('ann-bubble');
+    if (!bubble) {
+        bubble = document.createElement('div');
+        bubble.className = 'ann-bubble';
+        bubble.id = 'ann-bubble';
+        bubble.innerHTML = `
+            <button class="ann-bubble-btn ann-btn-highlight" title="高亮">
+                <i class="bi bi-highlighter"></i> 高亮
+            </button>
+            <button class="ann-bubble-btn ann-btn-annotate" title="批注">
+                <i class="bi bi-chat-left-text"></i> 批注
+            </button>
+        `;
+        document.body.appendChild(bubble);
+    }
 
-    const bubble = document.createElement('div');
-    bubble.className = 'ann-bubble';
-    bubble.id = 'ann-bubble';
-    bubble.innerHTML = `
-        <button class="ann-bubble-btn ann-btn-highlight" title="高亮">
-            <i class="bi bi-highlighter"></i> 高亮
-        </button>
-        <button class="ann-bubble-btn ann-btn-annotate" title="批注">
-            <i class="bi bi-chat-left-text"></i> 批注
-        </button>
-    `;
-    document.body.appendChild(bubble);
-
-    const sidebar = document.createElement('div');
-    sidebar.className = 'ann-sidebar';
-    sidebar.id = 'ann-sidebar';
-    sidebar.innerHTML = `<div class="ann-sidebar-header">批注详情</div><div class="ann-sidebar-body" id="ann-sidebar-body"></div>`;
-    document.body.appendChild(sidebar);
+    let sidebar = document.getElementById('ann-sidebar');
+    if (!sidebar) {
+        sidebar = document.createElement('div');
+        sidebar.className = 'ann-sidebar';
+        sidebar.id = 'ann-sidebar';
+        sidebar.innerHTML = `<div class="ann-sidebar-header">批注详情</div><div class="ann-sidebar-body" id="ann-sidebar-body"></div>`;
+        document.body.appendChild(sidebar);
+    }
 
     let selectionTimeout = null;
 
@@ -790,14 +805,20 @@ function initAnnotationUI(post) {
         }, 80);
     });
 
-    bubble.querySelector('.ann-btn-highlight').addEventListener('click', () => {
+    const highlightBtn = bubble.querySelector('.ann-btn-highlight');
+    const newHighlightBtn = highlightBtn.cloneNode(true);
+    highlightBtn.parentNode.replaceChild(newHighlightBtn, highlightBtn);
+    newHighlightBtn.addEventListener('click', () => {
         const range = getLastSelectionRange(contentEl);
         if (!range) return;
         createAnnotation(post.id, range, 'highlight', null);
         bubble.classList.remove('ann-bubble-visible');
     });
 
-    bubble.querySelector('.ann-btn-annotate').addEventListener('click', () => {
+    const annotateBtn = bubble.querySelector('.ann-btn-annotate');
+    const newAnnotateBtn = annotateBtn.cloneNode(true);
+    annotateBtn.parentNode.replaceChild(newAnnotateBtn, annotateBtn);
+    newAnnotateBtn.addEventListener('click', () => {
         const range = getLastSelectionRange(contentEl);
         if (!range) return;
         showAnnotationModal(post.id, range);
@@ -936,10 +957,17 @@ function showAnnotationModal(postId, range) {
 function refreshHighlights() {
     const contentEl = document.querySelector('.ann-content');
     if (!contentEl) return;
-    const rawContent = contentEl.textContent;
-    const newHtml = buildHighlightedHtml(rawContent, currentAnnotations);
-    contentEl.innerHTML = newHtml;
-    renderBadges(contentEl);
+
+    contentEl.querySelectorAll('mark.ann-mark').forEach(mark => {
+        const parent = mark.parentNode;
+        while (mark.firstChild) {
+            parent.insertBefore(mark.firstChild, mark);
+        }
+        parent.removeChild(mark);
+    });
+    contentEl.normalize();
+
+    applyAnnotationsToDOM(contentEl, currentAnnotations);
 }
 
 function renderBadges(contentEl) {

@@ -150,6 +150,13 @@ body {
     line-height: 1.8;
 }
 
+.ann-content mark.markdown-highlight {
+    background: linear-gradient(120deg, #fef08a 0%, #fde68a 100%);
+    color: inherit;
+    padding: 0.1em 0.25em;
+    border-radius: 3px;
+}
+
 mark.ann-mark {
     background: linear-gradient(120deg, #fef08a 0%, #fde68a 100%);
     color: inherit;
@@ -1658,6 +1665,32 @@ mark.ann-mark-annotated:hover {
     color: inherit;
     padding: 0.1em 0.25em;
     border-radius: 3px;
+}
+
+.markdown-body mark.ann-mark {
+    background: linear-gradient(120deg, #fef08a 0%, #fde68a 100%);
+    color: inherit;
+    padding: 2px 0;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    border-bottom: 2px solid #fbbf24;
+}
+
+.markdown-body mark.ann-mark-annotated {
+    background: linear-gradient(120deg, #bfdbfe 0%, #93c5fd 100%);
+    border-bottom-color: #3b82f6;
+}
+
+.markdown-body mark.ann-mark:hover {
+    background: linear-gradient(120deg, #fde68a 0%, #fcd34d 100%);
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+}
+
+.markdown-body mark.ann-mark-annotated:hover {
+    background: linear-gradient(120deg, #93c5fd 0%, #60a5fa 100%);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .markdown-body ul,
